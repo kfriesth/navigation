@@ -92,6 +92,9 @@ target_link_libraries(test_robot_pose_ekf
     gtest
     )
 
+add_rostest(${CMAKE_CURRENT_SOURCE_DIR}/test/test_robot_pose_ekf.launch)
+add_dependencies(run_tests_robot_pose_ekf_rostest_test_test_robot_pose_ekf.launch download_data_ekf_test2_indexed.bag)
+
 catkin_download_test_data(
   download_data_zero_covariance.bag
   http://download.ros.org/data/robot_pose_ekf/zero_covariance_indexed.bag
@@ -110,6 +113,7 @@ target_link_libraries(test_robot_pose_ekf_zero_covariance
 find_package(rostest)
 add_rostest(${CMAKE_CURRENT_SOURCE_DIR}/test/test_robot_pose_ekf.launch)
 add_rostest(${CMAKE_CURRENT_SOURCE_DIR}/test/test_robot_pose_ekf_zero_covariance.launch)
+add_dependencies(run_tests_robot_pose_ekf_rostest_test_test_robot_pose_ekf_zero_covariance.launch download_data_zero_covariance.bag)
 
 endif(CATKIN_ENABLE_TESTING)
 endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
