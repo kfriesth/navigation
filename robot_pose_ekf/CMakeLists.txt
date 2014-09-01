@@ -112,7 +112,6 @@ target_link_libraries(test_robot_pose_ekf_zero_covariance
 # This has to be done after we've already built targets, or catkin variables get borked
 find_package(rostest)
 
-endif(CATKIN_ENABLE_TESTING)
 
 catkin_download_test_data(download_data_gps_data.bag http://pr.willowgarage.com/data/robot_pose_ekf/gps_data.bag FILENAME test/gps_data.bag)
 add_executable(test_robot_pose_ekf_gps test/test_robot_pose_ekf_gps.cpp)
@@ -122,25 +121,18 @@ target_link_libraries(test_robot_pose_ekf_gps
     ${BFL_LIBRARIES}
     gtest
     )
+
+
 add_rostest(${CMAKE_CURRENT_SOURCE_DIR}/test/test_robot_pose_ekf_gps.launch)
 add_rostest(${CMAKE_CURRENT_SOURCE_DIR}/test/test_robot_pose_ekf_zero_covariance.launch)
 add_dependencies(run_tests_robot_pose_ekf_rostest_test_test_robot_pose_ekf_zero_covariance.launch download_data_zero_covariance.bag)
-
-
-catkin_download_test_data(download_data_gps_data.bag http://pr.willowgarage.com/data/robot_pose_ekf/gps_data.bag FILENAME test/gps_data.bag)
-add_executable(test_robot_pose_ekf_gps test/test_robot_pose_ekf_gps.cpp)
-target_link_libraries(test_robot_pose_ekf_gps
-    ${Boost_LIBRARIES}
-    ${catkin_LIBRARIES}
-    ${BFL_LIBRARIES}
-    gtest
-    )
-add_rostest(${CMAKE_CURRENT_SOURCE_DIR}/test/test_robot_pose_ekf_gps.launch)
 add_dependencies(run_tests_robot_pose_ekf_rostest_test_test_robot_pose_ekf_gps.launch download_data_gps_data.bag)
 
 
-add_dependencies(run_tests_robot_pose_ekf_rostest_test_test_robot_pose_ekf_zero_covariance.launch download_data_zero_covariance.bag)
-add_dependencies(run_tests_robot_pose_ekf_rostest_test_test_robot_pose_ekf_gps.launch download_data_gps_data.bag)
+endif(CATKIN_ENABLE_TESTING)
+
+
+
 
 
 endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
