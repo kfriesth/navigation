@@ -105,7 +105,7 @@ namespace move_base {
     private:
       /**
        * @brief  A service call that clears the costmaps of obstacles
-       * @param req The service request 
+       * @param req The service request
        * @param resp The service response
        * @return True if the service call succeeds, false otherwise
        */
@@ -120,6 +120,14 @@ namespace move_base {
       bool planService(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &resp);
 
       /**
+       * @brief  A service to dynamically change the global planner plugin
+       * @param req Empty
+       * @param resp Empty
+       * @return True if successful
+      **/
+      bool switchGlobalPlugin(std_srvs::Empty::Request &req, std_srvs::Empty::Response &resp);
+
+      /**
        * @brief  Make a new global plan
        * @param  goal The goal to plan to
        * @param  plan Will be filled in with the plan made by the planner
@@ -129,7 +137,7 @@ namespace move_base {
 
       /**
        * @brief  Load the recovery behaviors for the navigation stack from the parameter server
-       * @param node The ros::NodeHandle to be used for loading parameters 
+       * @param node The ros::NodeHandle to be used for loading parameters
        * @return True if the recovery behaviors were loaded successfully, false otherwise
        */
       bool loadRecoveryBehaviors(ros::NodeHandle node);
@@ -173,6 +181,11 @@ namespace move_base {
        */
       void wakePlanner(const ros::TimerEvent& event);
 
+      template <typename T>
+        void loadPlannerPlugin(std::string plugin_name,
+            pluginlib::ClassLoader<T>& plugin_loader, boost::shared_ptr<T>& planner,
+            costmap_2d::Costmap2DROS* costmap);
+
       tf::TransformListener& tf_;
 
       MoveBaseActionServer* as_;
@@ -192,7 +205,7 @@ namespace move_base {
       double conservative_reset_dist_, clearing_radius_;
       ros::Publisher current_goal_pub_, vel_pub_, action_goal_pub_;
       ros::Subscriber goal_sub_;
-      ros::ServiceServer make_plan_srv_, clear_costmaps_srv_;
+      ros::ServiceServer make_plan_srv_, clear_costmaps_srv_, switch_plugin_srv_;
       bool shutdown_costmaps_, clearing_rotation_allowed_, recovery_behavior_enabled_;
       double oscillation_timeout_, oscillation_distance_;
 
@@ -220,7 +233,7 @@ namespace move_base {
 
       boost::recursive_mutex configuration_mutex_;
       dynamic_reconfigure::Server<move_base::MoveBaseConfig> *dsrv_;
-      
+
       void reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level);
 
       move_base::MoveBaseConfig last_config_;
@@ -228,6 +241,42 @@ namespace move_base {
       bool setup_, p_freq_change_, c_freq_change_;
       bool new_global_plan_;
   };
+
+
+  template <typename T> void MoveBase::loadPlannerPlugin(std::string plugin_name, pluginlib::ClassLoader<T>& plugin_loader, boost::shared_ptr<T>& planner, costmap_2d::Costmap2DROS* costmap) {
+
+    try {
+      //check if a non fully qualified name has potentially been passed in
+      if(!plugin_loader.isClassAvailable(plugin_name)){
+        std::vector<std::string> classes = plugin_loader.getDeclaredClasses();
+        for(unsigned int i = 0; i < classes.size(); ++i){
+          if(plugin_name == plugin_loader.getName(classes[i])){
+            //if we've found a match... we'll get the fully qualified name and break out of the loop
+            ROS_WARN("Planner specifications should now include the package name. You are using a deprecated API. Please switch from %s to %s in your yaml file.",
+                plugin_name.c_str(), classes[i].c_str());
+            plugin_name = classes[i];
+            break;
+          }
+        }
+      }
+
+      planner = plugin_loader.createInstance(plugin_name);
+      planner->initialize(plugin_loader.getName(plugin_name), costmap);
+      ROS_INFO("Planner switched to:%s ",plugin_name.c_str());
+    } catch (const pluginlib::PluginlibException& ex)
+    {
+      ROS_FATAL("Failed to create the %s planner, are you sure it is properly registered and that the containing library is built? Exception: %s", plugin_name.c_str(), ex.what());
+      exit(1);
+    }
+  }
+
+
 };
+
+
+
+
+
+
 #endif
 
