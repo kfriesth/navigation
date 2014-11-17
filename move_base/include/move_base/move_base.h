@@ -177,7 +177,7 @@ namespace move_base {
       geometry_msgs::PoseStamped goalToGlobalFrame(const geometry_msgs::PoseStamped& goal_pose_msg);
 
       template <typename T>
-        void loadPlannerPlugin(std::string plugin_name,
+        bool loadPlannerPlugin(std::string plugin_name,
             pluginlib::ClassLoader<T>& plugin_loader, boost::shared_ptr<T>& planner,
             costmap_2d::Costmap2DROS* costmap);
 
@@ -238,7 +238,7 @@ namespace move_base {
   };
 
 
-  template <typename T> void MoveBase::loadPlannerPlugin(std::string plugin_name, pluginlib::ClassLoader<T>& plugin_loader, boost::shared_ptr<T>& planner, costmap_2d::Costmap2DROS* costmap) {
+  template <typename T> bool MoveBase::loadPlannerPlugin(std::string plugin_name, pluginlib::ClassLoader<T>& plugin_loader, boost::shared_ptr<T>& planner, costmap_2d::Costmap2DROS* costmap) {
 
     try {
       //check if a non fully qualified name has potentially been passed in
@@ -256,12 +256,22 @@ namespace move_base {
       }
 
       planner = plugin_loader.createInstance(plugin_name);
-      planner->initialize(plugin_loader.getName(plugin_name), costmap);
+
+      // wait for the current planner to finish planning
+      boost::unique_lock<boost::mutex> lock(planner_mutex_);
+
+      // Clean up all other planners
+      planner_plan_->clear();
+      latest_plan_->clear();
+      controller_plan_->clear();
+      resetState();
+      lock.unlock();
       ROS_INFO("Planner switched to:%s ",plugin_name.c_str());
+      return true;
     } catch (const pluginlib::PluginlibException& ex)
     {
       ROS_FATAL("Failed to create the %s planner, are you sure it is properly registered and that the containing library is built? Exception: %s", plugin_name.c_str(), ex.what());
-      exit(1);
+      return false;
     }
   }
 
