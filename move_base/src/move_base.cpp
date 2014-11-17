@@ -111,57 +111,24 @@ namespace move_base {
     planner_costmap_ros_ = new costmap_2d::Costmap2DROS("global_costmap", tf_);
     planner_costmap_ros_->pause();
 
-    //initialize the global planner
-    try {
-      //check if a non fully qualified name has potentially been passed in
-      if(!bgp_loader_.isClassAvailable(global_planner)){
-        std::vector<std::string> classes = bgp_loader_.getDeclaredClasses();
-        for(unsigned int i = 0; i < classes.size(); ++i){
-          if(global_planner == bgp_loader_.getName(classes[i])){
-            //if we've found a match... we'll get the fully qualified name and break out of the loop
-            ROS_WARN("Planner specifications should now include the package name. You are using a deprecated API. Please switch from %s to %s in your yaml file.",
-                global_planner.c_str(), classes[i].c_str());
-            global_planner = classes[i];
-            break;
-          }
-        }
-      }
-
-      planner_ = bgp_loader_.createInstance(global_planner);
-      planner_->initialize(bgp_loader_.getName(global_planner), planner_costmap_ros_);
-    } catch (const pluginlib::PluginlibException& ex)
-    {
-      ROS_FATAL("Failed to create the %s planner, are you sure it is properly registered and that the containing library is built? Exception: %s", global_planner.c_str(), ex.what());
+    if (!loadPlannerPlugin(global_planner, bgp_loader_, planner_, planner_costmap_ros_)) {
       exit(1);
+    }
+    else {
+      //successfully loaded, initialize plugin
+      planner_->initialize(bgp_loader_.getName(global_planner), planner_costmap_ros_);
     }
 
     //create the ros wrapper for the controller's costmap... and initializer a pointer we'll use with the underlying map
     controller_costmap_ros_ = new costmap_2d::Costmap2DROS("local_costmap", tf_);
     controller_costmap_ros_->pause();
 
-    //create a local planner
-    try {
-      //check if a non fully qualified name has potentially been passed in
-      if(!blp_loader_.isClassAvailable(local_planner)){
-        std::vector<std::string> classes = blp_loader_.getDeclaredClasses();
-        for(unsigned int i = 0; i < classes.size(); ++i){
-          if(local_planner == blp_loader_.getName(classes[i])){
-            //if we've found a match... we'll get the fully qualified name and break out of the loop
-            ROS_WARN("Planner specifications should now include the package name. You are using a deprecated API. Please switch from %s to %s in your yaml file.",
-                local_planner.c_str(), classes[i].c_str());
-            local_planner = classes[i];
-            break;
-          }
-        }
-      }
-
-      tc_ = blp_loader_.createInstance(local_planner);
-      ROS_INFO("Created local_planner %s", local_planner.c_str());
-      tc_->initialize(blp_loader_.getName(local_planner), &tf_, controller_costmap_ros_);
-    } catch (const pluginlib::PluginlibException& ex)
-    {
-      ROS_FATAL("Failed to create the %s planner, are you sure it is properly registered and that the containing library is built? Exception: %s", local_planner.c_str(), ex.what());
+    if(!loadPlannerPlugin(local_planner, blp_loader_,tc_, controller_costmap_ros_)) {
       exit(1);
+    }
+    else {
+      //successfully loaded, initialize plugin
+      tc_->initialize(blp_loader_.getName(local_planner), &tf_, controller_costmap_ros_);
     }
 
     // Start actively updating costmaps based on sensor data
@@ -248,75 +215,27 @@ namespace move_base {
       boost::shared_ptr<nav_core::BaseGlobalPlanner> old_planner = planner_;
       //initialize the global planner
       ROS_INFO("Loading global planner %s", config.base_global_planner.c_str());
-      try {
-        //check if a non fully qualified name has potentially been passed in
-        if(!bgp_loader_.isClassAvailable(config.base_global_planner)){
-          std::vector<std::string> classes = bgp_loader_.getDeclaredClasses();
-          for(unsigned int i = 0; i < classes.size(); ++i){
-            if(config.base_global_planner == bgp_loader_.getName(classes[i])){
-              //if we've found a match... we'll get the fully qualified name and break out of the loop
-              ROS_WARN("Planner specifications should now include the package name. You are using a deprecated API. Please switch from %s to %s in your yaml file.",
-                  config.base_global_planner.c_str(), classes[i].c_str());
-              config.base_global_planner = classes[i];
-              break;
-            }
-          }
-        }
-
-        planner_ = bgp_loader_.createInstance(config.base_global_planner);
-
-        // wait for the current planner to finish planning
-        boost::unique_lock<boost::mutex> lock(planner_mutex_);
-
-        // Clean up before initializing the new planner
-        planner_plan_->clear();
-        latest_plan_->clear();
-        controller_plan_->clear();
-        resetState();
-        planner_->initialize(bgp_loader_.getName(config.base_global_planner), planner_costmap_ros_);
-
-        lock.unlock();
-      } catch (const pluginlib::PluginlibException& ex)
-      {
-        ROS_FATAL("Failed to create the %s planner, are you sure it is properly registered and that the containing library is built? Exception: %s", config.base_global_planner.c_str(), ex.what());
+      if(!loadPlannerPlugin(config.base_global_planner,bgp_loader_,planner_, planner_costmap_ros_)) {
         planner_ = old_planner;
         config.base_global_planner = last_config_.base_global_planner;
+      }
+      else {
+        planner_->initialize(config.base_global_planner, planner_costmap_ros_);
       }
     }
 
     if(config.base_local_planner != last_config_.base_local_planner){
       boost::shared_ptr<nav_core::BaseLocalPlanner> old_planner = tc_;
       //create a local planner
-      try {
-        //check if a non fully qualified name has potentially been passed in
-        ROS_INFO("Loading local planner: %s", config.base_local_planner.c_str());
-        if(!blp_loader_.isClassAvailable(config.base_local_planner)){
-          std::vector<std::string> classes = blp_loader_.getDeclaredClasses();
-          for(unsigned int i = 0; i < classes.size(); ++i){
-            if(config.base_local_planner == blp_loader_.getName(classes[i])){
-              //if we've found a match... we'll get the fully qualified name and break out of the loop
-              ROS_WARN("Planner specifications should now include the package name. You are using a deprecated API. Please switch from %s to %s in your yaml file.",
-                  config.base_local_planner.c_str(), classes[i].c_str());
-              config.base_local_planner = classes[i];
-              break;
-            }
-          }
-        }
-        tc_ = blp_loader_.createInstance(config.base_local_planner);
-        // Clean up before initializing the new planner
-        planner_plan_->clear();
-        latest_plan_->clear();
-        controller_plan_->clear();
-        resetState();
-        tc_->initialize(blp_loader_.getName(config.base_local_planner), &tf_, controller_costmap_ros_);
-      } catch (const pluginlib::PluginlibException& ex)
-      {
-        ROS_FATAL("Failed to create the %s planner, are you sure it is properly registered and that the containing library is built? Exception: %s", config.base_local_planner.c_str(), ex.what());
+      ROS_INFO("Loading local planner: %s", config.base_local_planner.c_str());
+      if(!loadPlannerPlugin(config.base_local_planner, blp_loader_, tc_, controller_costmap_ros_)) {
         tc_ = old_planner;
         config.base_local_planner = last_config_.base_local_planner;
       }
+      else {
+        tc_->initialize(config.base_local_planner, &tf_, controller_costmap_ros_);
+      }
     }
-
     last_config_ = config;
   }
 
@@ -329,63 +248,60 @@ namespace move_base {
     action_goal_pub_.publish(action_goal);
   }
 
-  void MoveBase::clearCostmapWindows(double size_x, double size_y){
+  void MoveBase::clearCostmapWindows(double size_x, double size_y) {
     tf::Stamped<tf::Pose> global_pose;
-
     //clear the planner's costmap
     planner_costmap_ros_->getRobotPose(global_pose);
-
     std::vector<geometry_msgs::Point> clear_poly;
     double x = global_pose.getOrigin().x();
     double y = global_pose.getOrigin().y();
     geometry_msgs::Point pt;
-
     pt.x = x - size_x / 2;
     pt.y = y - size_x / 2;
     clear_poly.push_back(pt);
-
     pt.x = x + size_x / 2;
     pt.y = y - size_x / 2;
     clear_poly.push_back(pt);
-
     pt.x = x + size_x / 2;
     pt.y = y + size_x / 2;
     clear_poly.push_back(pt);
-
     pt.x = x - size_x / 2;
     pt.y = y + size_x / 2;
     clear_poly.push_back(pt);
-
     planner_costmap_ros_->getCostmap()->setConvexPolygonCost(clear_poly, costmap_2d::FREE_SPACE);
-
     //clear the controller's costmap
     controller_costmap_ros_->getRobotPose(global_pose);
-
     clear_poly.clear();
     x = global_pose.getOrigin().x();
     y = global_pose.getOrigin().y();
-
     pt.x = x - size_x / 2;
     pt.y = y - size_x / 2;
     clear_poly.push_back(pt);
-
     pt.x = x + size_x / 2;
     pt.y = y - size_x / 2;
     clear_poly.push_back(pt);
-
     pt.x = x + size_x / 2;
     pt.y = y + size_x / 2;
     clear_poly.push_back(pt);
-
     pt.x = x - size_x / 2;
     pt.y = y + size_x / 2;
     clear_poly.push_back(pt);
-
     controller_costmap_ros_->getCostmap()->setConvexPolygonCost(clear_poly, costmap_2d::FREE_SPACE);
   }
 
+
+
   bool MoveBase::switchGlobalPlugin(std_srvs::Empty::Request &req, std_srvs::Empty::Response &resp) {
-    loadPlannerPlugin("global_planner/GlobalPlanner", bgp_loader_, planner_, planner_costmap_ros_);
+   std::string plugin_name = "global_planner/GlobalPlanner";
+   if(!loadPlannerPlugin("global_planner/GlobalPlanner", bgp_loader_, planner_, planner_costmap_ros_))   {
+     ROS_ERROR("Unable to switch plugins");
+     return false;
+   }
+   else {
+    ROS_INFO("Switching global plugin to %s",plugin_name.c_str());
+    planner_->initialize(plugin_name, planner_costmap_ros_);
+    return true;
+   }
   }
 
 
