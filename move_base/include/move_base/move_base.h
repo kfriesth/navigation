@@ -55,6 +55,7 @@
 
 #include <pluginlib/class_loader.h>
 #include <std_srvs/Empty.h>
+#include <move_base/ChangePlanner.h>
 
 #include <dynamic_reconfigure/server.h>
 #include "move_base/MoveBaseConfig.h"
@@ -121,11 +122,11 @@ namespace move_base {
 
       /**
        * @brief  A service to dynamically change the global planner plugin
-       * @param req Empty
+       * @param req The plugin to switch to
        * @param resp Empty
        * @return True if successful
       **/
-      bool switchGlobalPlugin(std_srvs::Empty::Request &req, std_srvs::Empty::Response &resp);
+      bool switchGlobalPlugin(move_base::ChangePlanner::Request &req, move_base::ChangePlanner::Response &resp);
 
       /**
        * @brief  Make a new global plan
@@ -271,7 +272,6 @@ namespace move_base {
       controller_plan_->clear();
       resetState();
       lock.unlock();
-      ROS_INFO("Planner switched to:%s ",plugin_name.c_str());
       return true;
     } catch (const pluginlib::PluginlibException& ex)
     {

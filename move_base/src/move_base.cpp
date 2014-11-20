@@ -289,16 +289,14 @@ namespace move_base {
     controller_costmap_ros_->getCostmap()->setConvexPolygonCost(clear_poly, costmap_2d::FREE_SPACE);
   }
 
-
-
-  bool MoveBase::switchGlobalPlugin(std_srvs::Empty::Request &req, std_srvs::Empty::Response &resp) {
-   std::string plugin_name = "global_planner/GlobalPlanner";
-   if(!loadPlannerPlugin("global_planner/GlobalPlanner", bgp_loader_, planner_, planner_costmap_ros_))   {
+  bool MoveBase::switchGlobalPlugin(move_base::ChangePlanner::Request &req, move_base::ChangePlanner::Response &resp) {
+   std::string plugin_name = req.planner_name;
+   if(!loadPlannerPlugin(plugin_name, bgp_loader_, planner_, planner_costmap_ros_))   {
      ROS_ERROR("Unable to switch plugins");
      return false;
    }
    else {
-    ROS_INFO("Switching global plugin to %s",plugin_name.c_str());
+    ROS_INFO("Switching global planner plugin to %s",plugin_name.c_str());
     planner_->initialize(plugin_name, planner_costmap_ros_);
     return true;
    }
