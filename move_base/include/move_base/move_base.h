@@ -55,7 +55,7 @@
 
 #include <pluginlib/class_loader.h>
 #include <std_srvs/Empty.h>
-#include <move_base/ChangePlanner.h>
+#include <move_base_msgs/ChangePlanner.h>
 
 #include <dynamic_reconfigure/server.h>
 #include "move_base/MoveBaseConfig.h"
@@ -126,7 +126,7 @@ namespace move_base {
        * @param resp Empty
        * @return True if successful
       **/
-      bool switchGlobalPlugin(move_base::ChangePlanner::Request &req, move_base::ChangePlanner::Response &resp);
+      bool switchGlobalPlugin(move_base_msgs::ChangePlanner::Request &req, move_base_msgs::ChangePlanner::Response &resp);
 
       /**
        * @brief  Make a new global plan
@@ -284,4 +284,3 @@ namespace move_base {
 
 
 #endif
-
