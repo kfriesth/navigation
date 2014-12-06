@@ -18,6 +18,13 @@ add_action_files(
         MoveBase.action
 )
 
+# services
+add_service_files(
+  DIRECTORY srv
+  FILES
+  ChangePlanner.srv
+)
+
 generate_messages(
     DEPENDENCIES
         actionlib_msgs
