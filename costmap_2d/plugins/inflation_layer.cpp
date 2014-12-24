@@ -55,6 +55,9 @@ InflationLayer::InflationLayer()
   , cell_inflation_radius_(0)
   , cached_cell_inflation_radius_(0)
   , dsrv_(NULL)
+  , seen_(NULL)
+  , cached_costs_(NULL)
+  , cached_distances_(NULL)
 {
   access_ = new boost::shared_mutex();
 }
@@ -65,6 +68,8 @@ void InflationLayer::onInitialize()
     boost::unique_lock < boost::shared_mutex > lock(*access_);
     ros::NodeHandle nh("~/" + name_), g_nh;
     current_ = true;
+    if (seen_)
+      delete[] seen_;
     seen_ = NULL;
     need_reinflation_ = false;
 
@@ -113,7 +118,7 @@ void InflationLayer::matchSize()
 
   unsigned int size_x = costmap->getSizeInCellsX(), size_y = costmap->getSizeInCellsY();
   if (seen_)
-    delete seen_;
+    delete[] seen_;
   seen_ = new bool[size_x * size_y];
 }
 
@@ -147,6 +152,7 @@ void InflationLayer::onFootprintChanged()
 void InflationLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i,
                                           int max_j)
 {
+  ROS_ERROR("Test1");
   boost::unique_lock < boost::shared_mutex > lock(*access_);
   if (!enabled_)
     return;
@@ -157,8 +163,10 @@ void InflationLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, 
   unsigned char* master_array = master_grid.getCharMap();
   unsigned int size_x = master_grid.getSizeInCellsX(), size_y = master_grid.getSizeInCellsY();
 
+  ROS_ERROR("Test2");
   memset(seen_, false, size_x * size_y * sizeof(bool));
 
+  ROS_ERROR("Test3");
   // We need to include in the inflation cells outside the bounding
   // box min_i...max_j, by the amount cell_inflation_radius_.  Cells
   // up to that distance outside the box can still influence the costs
@@ -186,6 +194,7 @@ void InflationLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, 
     }
   }
 
+  ROS_ERROR("Test4");
   while (!inflation_queue_.empty())
   {
     //get the highest priority cell and pop it off the priority queue
@@ -210,6 +219,8 @@ void InflationLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, 
     if (my < size_y - 1)
       enqueue(master_array, index + size_x, mx, my + 1, sx, sy);
   }
+
+  ROS_ERROR("Done");
 }
 
 /**
@@ -258,8 +269,7 @@ void InflationLayer::computeCaches()
   //based on the inflation radius... compute distance and cost caches
   if(cell_inflation_radius_ != cached_cell_inflation_radius_)
   {
-    if(cached_cell_inflation_radius_ > 0)
-      deleteKernels();
+    deleteKernels();
 
     cached_costs_ = new unsigned char*[cell_inflation_radius_ + 2];
     cached_distances_ = new double*[cell_inflation_radius_ + 2];
@@ -292,18 +302,24 @@ void InflationLayer::deleteKernels()
   {
     for (unsigned int i = 0; i <= cached_cell_inflation_radius_ + 1; ++i)
     {
-      delete[] cached_distances_[i];
+      if (cached_distances_[i])
+        delete[] cached_distances_[i];
     }
-    delete[] cached_distances_;
+    if (cached_distances_)
+      delete[] cached_distances_;
+    cached_distances_ = NULL;
   }
 
   if (cached_costs_ != NULL)
   {
     for (unsigned int i = 0; i <= cached_cell_inflation_radius_ + 1; ++i)
     {
-      delete[] cached_costs_[i];
+      if (cached_costs_[i])
+        delete[] cached_costs_[i];
     }
-    delete[] cached_costs_;
+    if (cached_costs_)
+      delete[] cached_costs_;
+    cached_costs_ = NULL;
   }
 }
 
