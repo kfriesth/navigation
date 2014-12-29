@@ -71,6 +71,7 @@ void InflationLayer::onInitialize()
     if (seen_)
       delete[] seen_;
     seen_ = NULL;
+    seen_size_ = 0;
     need_reinflation_ = false;
 
     dynamic_reconfigure::Server<costmap_2d::InflationPluginConfig>::CallbackType cb = boost::bind(
@@ -120,6 +121,7 @@ void InflationLayer::matchSize()
   if (seen_)
     delete[] seen_;
   seen_ = new bool[size_x * size_y];
+  seen_size_ = size_x * size_y;
 }
 
 void InflationLayer::updateBounds(double robot_x, double robot_y, double robot_yaw, double* min_x,
@@ -152,7 +154,6 @@ void InflationLayer::onFootprintChanged()
 void InflationLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i,
                                           int max_j)
 {
-  ROS_ERROR("Test1");
   boost::unique_lock < boost::shared_mutex > lock(*access_);
   if (!enabled_)
     return;
@@ -163,10 +164,20 @@ void InflationLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, 
   unsigned char* master_array = master_grid.getCharMap();
   unsigned int size_x = master_grid.getSizeInCellsX(), size_y = master_grid.getSizeInCellsY();
 
-  ROS_ERROR("Test2");
+  if (seen_ == NULL) {
+    ROS_ERROR("seen is NULL");
+    seen_ = new bool[size_x * size_y];
+    seen_size_ = size_x * size_y;
+  }
+  else if (seen_size_ != size_x * size_y) 
+  {
+    ROS_ERROR("seen size is wrong");
+    delete[] seen_; 
+    seen_ = new bool[size_x * size_y];
+    seen_size_ = size_x * size_y;
+  }
   memset(seen_, false, size_x * size_y * sizeof(bool));
 
-  ROS_ERROR("Test3");
   // We need to include in the inflation cells outside the bounding
   // box min_i...max_j, by the amount cell_inflation_radius_.  Cells
   // up to that distance outside the box can still influence the costs
@@ -194,7 +205,6 @@ void InflationLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, 
     }
   }
 
-  ROS_ERROR("Test4");
   while (!inflation_queue_.empty())
   {
     //get the highest priority cell and pop it off the priority queue
@@ -220,7 +230,6 @@ void InflationLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, 
       enqueue(master_array, index + size_x, mx, my + 1, sx, sy);
   }
 
-  ROS_ERROR("Done");
 }
 
 /**
