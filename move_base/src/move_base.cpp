@@ -111,6 +111,7 @@ namespace move_base {
     planner_costmap_ros_ = new costmap_2d::Costmap2DROS("global_costmap", tf_);
     planner_costmap_ros_->pause();
 
+    boost::unique_lock<boost::mutex> lock(planner_mutex_);
     if (!loadPlannerPlugin(global_planner, bgp_loader_, planner_, planner_costmap_ros_)) {
       exit(1);
     }
@@ -130,6 +131,7 @@ namespace move_base {
       //successfully loaded, initialize plugin
       tc_->initialize(blp_loader_.getName(local_planner), &tf_, controller_costmap_ros_);
     }
+    lock.unlock();
 
     // Start actively updating costmaps based on sensor data
     planner_costmap_ros_->start();
@@ -215,6 +217,8 @@ namespace move_base {
       boost::shared_ptr<nav_core::BaseGlobalPlanner> old_planner = planner_;
       //initialize the global planner
       ROS_INFO("Loading global planner %s", config.base_global_planner.c_str());
+
+      boost::unique_lock<boost::mutex> lock(planner_mutex_);
       if(!loadPlannerPlugin(config.base_global_planner,bgp_loader_,planner_, planner_costmap_ros_)) {
         planner_ = old_planner;
         config.base_global_planner = last_config_.base_global_planner;
@@ -222,12 +226,14 @@ namespace move_base {
       else {
         planner_->initialize(config.base_global_planner, planner_costmap_ros_);
       }
+      lock.unlock();
     }
 
     if(config.base_local_planner != last_config_.base_local_planner){
       boost::shared_ptr<nav_core::BaseLocalPlanner> old_planner = tc_;
       //create a local planner
       ROS_INFO("Loading local planner: %s", config.base_local_planner.c_str());
+      boost::unique_lock<boost::mutex> lock(planner_mutex_);
       if(!loadPlannerPlugin(config.base_local_planner, blp_loader_, tc_, controller_costmap_ros_)) {
         tc_ = old_planner;
         config.base_local_planner = last_config_.base_local_planner;
@@ -235,6 +241,7 @@ namespace move_base {
       else {
         tc_->initialize(config.base_local_planner, &tf_, controller_costmap_ros_);
       }
+      lock.unlock();
     }
     last_config_ = config;
   }
@@ -291,15 +298,19 @@ namespace move_base {
 
   bool MoveBase::switchGlobalPlugin(move_base_msgs::ChangePlanner::Request &req, move_base_msgs::ChangePlanner::Response &resp) {
    std::string plugin_name = req.planner_name;
+   bool ret;
+   boost::unique_lock<boost::mutex> lock(planner_mutex_);
    if(!loadPlannerPlugin(plugin_name, bgp_loader_, planner_, planner_costmap_ros_))   {
      ROS_ERROR("Unable to switch plugins");
-     return false;
+     ret = false;
    }
    else {
     ROS_INFO("Switching global planner plugin to %s",plugin_name.c_str());
     planner_->initialize(plugin_name, planner_costmap_ros_);
-    return true;
+    ret = true;
    }
+   lock.unlock();
+   return ret;
   }
 
 
