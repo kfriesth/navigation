@@ -263,15 +263,11 @@ namespace move_base {
 
       planner = plugin_loader.createInstance(plugin_name);
 
-      // wait for the current planner to finish planning
-      boost::unique_lock<boost::mutex> lock(planner_mutex_);
-
       // Clean up all other planners
       planner_plan_->clear();
       latest_plan_->clear();
       controller_plan_->clear();
       resetState();
-      lock.unlock();
       return true;
     } catch (const pluginlib::PluginlibException& ex)
     {
