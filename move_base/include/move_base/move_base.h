@@ -120,6 +120,15 @@ namespace move_base {
        */
       bool planService(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &resp);
 
+
+      /**
+       * @brief  A service call that can be made to force a replan of the current goal
+       * @param  req The service request
+       * @param  resp The service reponse
+       * @return True if planning succeeded, false otherwise
+       */
+      bool replanService(std_srvs::Empty::Request &req, std_srvs::Empty::Response &resp);
+
       /**
        * @brief  A service to dynamically change the global planner plugin
        * @param req The plugin to switch to
@@ -206,7 +215,7 @@ namespace move_base {
       double conservative_reset_dist_, clearing_radius_;
       ros::Publisher current_goal_pub_, vel_pub_, action_goal_pub_;
       ros::Subscriber goal_sub_;
-      ros::ServiceServer make_plan_srv_, clear_costmaps_srv_, switch_plugin_srv_;
+      ros::ServiceServer make_plan_srv_, clear_costmaps_srv_, switch_plugin_srv_, replan_srv_;
       bool shutdown_costmaps_, clearing_rotation_allowed_, recovery_behavior_enabled_;
       double oscillation_timeout_, oscillation_distance_;
 

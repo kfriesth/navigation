@@ -146,6 +146,8 @@ namespace move_base {
     //adversize a service for switching the global planner plugin
     switch_plugin_srv_ = private_nh.advertiseService("switch_global_planner", &MoveBase::switchGlobalPlugin, this);
 
+    replan_srv_ = private_nh.advertiseService("replan", &MoveBase::replanService, this);
+
     //if we shutdown our costmaps when we're deactivated... we'll do that now
     if(shutdown_costmaps_){
       ROS_DEBUG_NAMED("move_base","Stopping costmaps initially");
@@ -321,6 +323,16 @@ namespace move_base {
     return true;
   }
 
+  bool MoveBase::replanService(std_srvs::Empty::Request &req, std_srvs::Empty::Response &resp){ 
+    // If there is an active goal, wake up the planning thread to kick a replan
+    if(as_->isActive()){
+      boost::unique_lock<boost::mutex> lock(planner_mutex_);
+      runPlanner_ = true;
+      planner_cond_.notify_one();
+      lock.unlock();
+    }
+    return true;
+  }
 
   bool MoveBase::planService(nav_msgs::GetPlan::Request &req, nav_msgs::GetPlan::Response &resp){
     if(as_->isActive()){
