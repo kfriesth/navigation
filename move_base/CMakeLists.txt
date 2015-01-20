@@ -11,6 +11,7 @@ find_package(catkin REQUIRED
         message_generation
         nav_core
         tf
+        move_base_msgs
 )
 find_package(Eigen REQUIRED)
 add_definitions(${EIGEN_DEFINITIONS})
@@ -26,6 +27,7 @@ catkin_package(
     CATKIN_DEPENDS
         roscpp
         dynamic_reconfigure
+        move_base_msgs
 )
 
 include_directories(
@@ -43,7 +45,10 @@ target_link_libraries(move_base
     ${catkin_LIBRARIES}
     )
 add_dependencies(move_base move_base_gencfg)
-add_dependencies(move_base geometry_msgs_gencpp)
+add_dependencies(move_base geomet
+catkin_package(
+    CATKry_msgs_gencpp)
+add_dependencies(move_base move_base_msgs_gencpp)
 
 add_executable(move_base_node
   src/move_base_node.cpp
