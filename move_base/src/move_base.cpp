@@ -53,7 +53,7 @@ namespace move_base {
     blp_loader_("nav_core", "nav_core::BaseLocalPlanner"),
     recovery_loader_("nav_core", "nav_core::RecoveryBehavior"),
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
-    runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false), new_global_plan_(false), costmaps_cleared_(false) {
+    runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false), new_global_plan_(false) {
 
     as_ = new MoveBaseActionServer(ros::NodeHandle(), "move_base", boost::bind(&MoveBase::executeCb, this, _1), false);
 
@@ -318,10 +318,9 @@ namespace move_base {
 
   bool MoveBase::clearCostmapsService(std_srvs::Empty::Request &req, std_srvs::Empty::Response &resp){
     //clear the costmaps
-    costmaps_cleared_ = true; // we can't replan while we are clearing
+    boost::unique_lock<boost::mutex> lock(clear_costmap_mutex_);
     planner_costmap_ros_->resetLayers();
     controller_costmap_ros_->resetLayers();
-    costmaps_cleared_ = false;
     return true;
   }
 
@@ -452,10 +451,11 @@ namespace move_base {
   }
 
   bool MoveBase::makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan){
+    boost::unique_lock< boost::shared_mutex > cm_lock(clear_costmap_mutex_);
     boost::unique_lock< boost::shared_mutex > lock(*(planner_costmap_ros_->getCostmap()->getLock()));
 
     //check if the costmap is current before planning on it
-    if (costmaps_cleared_ || !planner_costmap_ros_->isCurrent())
+    if (!planner_costmap_ros_->isCurrent())
     {
       ROS_DEBUG_NAMED("move_base", "Planner costmap ROS is not current, unable to create global plan");
       return false;
@@ -616,6 +616,8 @@ namespace move_base {
         }
         lock.unlock();
       }
+
+      cleard_costmaps_ = costmaps_clearing_;
 
       //take the mutex for the next iteration
       lock.lock();

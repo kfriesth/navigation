@@ -216,7 +216,7 @@ namespace move_base {
       ros::Publisher current_goal_pub_, vel_pub_, action_goal_pub_;
       ros::Subscriber goal_sub_;
       ros::ServiceServer make_plan_srv_, clear_costmaps_srv_, switch_plugin_srv_, replan_srv_;
-      bool shutdown_costmaps_, clearing_rotation_allowed_, recovery_behavior_enabled_, costmaps_cleared_;
+      bool shutdown_costmaps_, clearing_rotation_allowed_, recovery_behavior_enabled_;
       double oscillation_timeout_, oscillation_distance_;
 
       MoveBaseState state_;
@@ -236,6 +236,7 @@ namespace move_base {
       //set up the planner's thread
       bool runPlanner_;
       boost::mutex planner_mutex_;
+      boost::mutex clear_costmap_mutex_;
       boost::condition_variable planner_cond_;
       geometry_msgs::PoseStamped planner_goal_;
       boost::thread* planner_thread_;
