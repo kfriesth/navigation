@@ -455,7 +455,7 @@ namespace move_base {
     boost::unique_lock< boost::shared_mutex > lock(*(planner_costmap_ros_->getCostmap()->getLock()));
 
     //check if the costmap is current before planning on it
-    if (cleared_costmaps || !planner_costmap_ros_->isCurrent())
+    if (costmaps_cleared_ || !planner_costmap_ros_->isCurrent())
     {
       ROS_DEBUG_NAMED("move_base", "Planner costmap ROS is not current, unable to create global plan");
       return false;
