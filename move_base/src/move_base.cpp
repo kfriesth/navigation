@@ -321,6 +321,7 @@ namespace move_base {
     boost::unique_lock<boost::mutex> lock(clear_costmap_mutex_);
     planner_costmap_ros_->resetLayers();
     controller_costmap_ros_->resetLayers();
+    planner_costmap_ros_->updateMap();
     return true;
   }
 
@@ -451,7 +452,7 @@ namespace move_base {
   }
 
   bool MoveBase::makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan){
-    boost::unique_lock< boost::shared_mutex > cm_lock(clear_costmap_mutex_);
+    boost::unique_lock< boost::mutex > cm_lock(clear_costmap_mutex_);
     boost::unique_lock< boost::shared_mutex > lock(*(planner_costmap_ros_->getCostmap()->getLock()));
 
     //check if the costmap is current before planning on it
@@ -616,8 +617,6 @@ namespace move_base {
         }
         lock.unlock();
       }
-
-      cleard_costmaps_ = costmaps_clearing_;
 
       //take the mutex for the next iteration
       lock.lock();
