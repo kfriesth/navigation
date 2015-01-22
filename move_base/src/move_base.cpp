@@ -320,7 +320,7 @@ namespace move_base {
     //clear the costmaps
     boost::unique_lock<boost::mutex> lock(clear_costmap_mutex_);
     planner_costmap_ros_->resetLayers();
-    controller_costmap_ros_->resetLayers();
+    //controller_costmap_ros_->resetLayers();
     planner_costmap_ros_->updateMap();
     return true;
   }
