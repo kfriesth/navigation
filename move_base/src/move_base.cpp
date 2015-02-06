@@ -53,7 +53,7 @@ namespace move_base {
     blp_loader_("nav_core", "nav_core::BaseLocalPlanner"),
     recovery_loader_("nav_core", "nav_core::RecoveryBehavior"),
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
-    runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false), new_global_plan_(false) {
+    runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false), new_global_plan_(false), new_goal_request_(false) {
 
     as_ = new MoveBaseActionServer(ros::NodeHandle(), "move_base", boost::bind(&MoveBase::executeCb, this, _1), false);
 
@@ -578,6 +578,7 @@ namespace move_base {
 
       //time to plan! get a copy of the goal and unlock the mutex
       geometry_msgs::PoseStamped temp_goal = planner_goal_;
+      new_goal_request_ = false;
       lock.unlock();
       ROS_DEBUG_NAMED("move_base_plan_thread","Planning...");
 
@@ -585,12 +586,16 @@ namespace move_base {
       planner_plan_->clear();
       bool gotPlan = n.ok() && makePlan(temp_goal, *planner_plan_);
 
+      lock.lock();
+      if(new_goal_request_){
+        //a new goal came in while we were planning restart planning
+        continue;
+      }
       if(gotPlan){
         ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
         //pointer swap the plans under mutex (the controller will pull from latest_plan_)
         std::vector<geometry_msgs::PoseStamped>* temp_plan = planner_plan_;
 
-        lock.lock();
         planner_plan_ = latest_plan_;
         latest_plan_ = temp_plan;
         last_valid_plan_ = ros::Time::now();
@@ -603,7 +608,6 @@ namespace move_base {
           state_ = CONTROLLING;
         if(planner_frequency_ <= 0)
           runPlanner_ = false;
-        lock.unlock();
       }
       //if we didn't get a plan and we are in the planning state (the robot isn't moving)
       else if(state_==PLANNING){
@@ -611,18 +615,13 @@ namespace move_base {
         ros::Time attempt_end = last_valid_plan_ + ros::Duration(planner_patience_);
 
         //check if we've tried to make a plan for over our time limit
-        lock.lock();
         if(ros::Time::now() > attempt_end && runPlanner_){
           //we'll move into our obstacle clearing mode
           state_ = CLEARING;
           publishZeroVelocity();
           recovery_trigger_ = PLANNING_R;
         }
-        lock.unlock();
       }
-
-      //take the mutex for the next iteration
-      lock.lock();
 
       //setup sleep interface if needed
       if(planner_frequency_ > 0){
@@ -688,15 +687,16 @@ namespace move_base {
 
           goal = goalToGlobalFrame(new_goal.target_pose);
 
-          //we'll make sure that we reset our state for the next execution cycle
-          recovery_index_ = 0;
-          state_ = PLANNING;
-
           //we have a new goal so make sure the planner is awake
           lock.lock();
           planner_goal_ = goal;
+          new_goal_request_ = true;
           runPlanner_ = true;
           planner_cond_.notify_one();
+
+          //we'll make sure that we reset our state for the next execution cycle
+          recovery_index_ = 0;
+          state_ = PLANNING;
           lock.unlock();
 
           //publish the goal point to the visualizer
