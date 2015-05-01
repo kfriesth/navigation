@@ -407,27 +407,49 @@ void ObstacleLayer::updateBounds(double robot_x, double robot_y, double robot_ya
   }
 
   footprint_layer_.updateBounds(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
+
+  // ray trace bounding box in cell coordinates
+  worldToMapEnforceBounds(*min_x, *min_y, rt_min_x_, rt_min_y_);
+  worldToMapEnforceBounds(*max_x, *max_y, rt_max_x_, rt_max_y_);
 }
 
-void ObstacleLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)
+void ObstacleLayer::updateCosts(LayerActions* layer_actions, costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)
 {
   if (!enabled_)
     return;
 
   // The footprint layer clears the footprint in this ObstacleLayer
   // before we merge this obstacle layer into the master_grid.
-  footprint_layer_.updateCosts(*this, min_i, min_j, max_i, max_j);
+  footprint_layer_.updateCosts(layer_actions, *this, min_i, min_j, max_i, max_j);
 
-  switch(combination_method_){
-    case 0: // Overwrite
-      updateWithOverwrite(master_grid, min_i, min_j, max_i, max_j);
-      break;
-    case 1: // Maximum
-      updateWithMax(master_grid, min_i, min_j, max_i, max_j);
-      break;
-    default: // Nothing
-      break;
+  if(combination_method_==0)
+  {
+    updateWithOverwrite(master_grid, min_i, min_j, max_i, max_j);
+    // making modifications in this window
+    if(layer_actions)
+      layer_actions->addAction(
+            AABB(rt_min_x_, rt_min_y_, rt_max_x_, rt_max_y_),
+            this,
+            AABB(rt_min_x_, rt_min_y_, rt_max_x_, rt_max_y_),
+            &master_grid,
+            LayerActions::OVERWRITE,
+            __FILE__, __LINE__
+            );
   }
+  else
+  {
+    updateWithMax(master_grid, min_i, min_j, max_i, max_j);
+    if(layer_actions)
+      layer_actions->addAction(
+            AABB(rt_min_x_, rt_min_y_, rt_max_x_, rt_max_y_),
+            this,
+            AABB(rt_min_x_, rt_min_y_, rt_max_x_, rt_max_y_),
+            &master_grid,
+            LayerActions::MAX,
+            __FILE__, __LINE__
+            );
+  }
+
 }
 
 void ObstacleLayer::addStaticObservation(costmap_2d::Observation& obs, bool marking, bool clearing)
@@ -550,6 +572,7 @@ void ObstacleLayer::raytraceFreespace(const Observation& clearing_observation, d
 
     unsigned int cell_raytrace_range = cellDistance(clearing_observation.raytrace_range_);
     MarkCell marker(costmap_, FREE_SPACE);
+
     //and finally... we can execute our trace to clear obstacles along that line
     raytraceLine(marker, x0, y0, x1, y1, cell_raytrace_range);
 

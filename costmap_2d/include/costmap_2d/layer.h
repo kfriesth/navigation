@@ -42,10 +42,180 @@
 #include <string>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
+#include <vector>
+#include <string>
+#include <geometry_msgs/Point32.h>
 
 namespace costmap_2d
 {
 class LayeredCostmap;
+class Layer;
+
+/**
+ * @class AABB
+ * @brief Axis aligned bounding box
+ */
+class AABB
+{
+public:
+  /**
+   * @brief Create an empty Axis Aligned Bounding Box with both points at the origin
+   */
+  AABB();
+
+  /**
+   * @brief Copy constructor
+   */
+  AABB(const AABB& r);
+
+  /**
+   * @brief Create an empty Axis Aligned Bounding Box with both points at the given location
+   */
+  AABB(int px, int py);
+
+  /**
+   * @brief Create an Axis Aligned Bounding Box that bounds the given points
+   */
+  AABB(int px1, int py1, int px2, int py2);
+
+  /**
+   * @brief Create an Axis Aligned Bounding Box about given points
+   */
+  AABB(const std::vector<geometry_msgs::Point>& pts);
+
+  /**
+   * @brief Determine if this AABB is the same as another with possible tolerance
+   * @param r AABB to compare against
+   * @param tol Tolerance of compairson (default 0)
+   */
+  bool same(const AABB& r, int tol=0);
+
+  void copyTo(AABB& dst) const;
+
+  void expandBoundingBox(const AABB& bb);
+
+  /**
+   * @brief Expand the bounding box by a constant value
+   * @param r expansion margin
+   */
+  void expandBoundingBox(int r);
+
+  bool inside(int px, int py, int margin = 0) const;
+  bool inside(const AABB& bb, int margin = 0) const;
+
+  /**
+   * @brief Clip the passed AABB against the calling AABB
+   * @param bb AABB to be clipped
+   * @param clipped destination AABB representing the clipped bounding box
+   */
+  void clip(const AABB& bb, AABB& clipped) const;
+
+  /**
+   * @brief Make sure max coordinates are not smaller than min coordinates.
+   */
+  void clampBounds();
+
+  /**
+   * @brief Compute how much of the given AABB is inside the calling AABB as a ratio of areas
+   * @param bb The AABB to use as a test
+   */
+  double ratioInside(const AABB& bb) const;
+
+  int area() const;
+
+  int xn() const;
+  int yn() const;
+
+  int x0() const;
+  int y0() const;
+
+  /**
+   * @brief Determine if this AABB intersects another AABB
+   * @param bb AABB to compare against
+   * @param margin extra margin applied to the AABBs. A positive margin will make side by side AABBs appear to intersect. Default 0.
+   */
+  bool intersect(const AABB& bb, int margin = 0) const;
+
+  bool initialized() const {return initialized_;}
+  void setInitialized(bool b) {initialized_ = b;}
+
+
+  /**
+   * @brief Static method that will take a vector of bounding boxes and modify it so that overlapping boxes are merged
+   * @param vec_aabb the vector of boxes that will be merged. This vector is modified to contain the solution
+   * @param margin extra margin applied to the AABBs. A positive margin will make side by side AABBs appear to intersect. Default 0.
+   */
+  static void mergeIntersecting(std::vector<AABB>& vec_aabb, int margin=0);
+
+  int min_x, min_y;
+  int max_x, max_y;
+  bool initialized_;
+};
+
+/**
+ * @class LayerActions
+ * @brief Auxiliary storage object to track actions taken by the layer plugins to help with optimization.
+ */
+class LayerActions
+{
+public:
+  LayerActions() {}
+
+  enum Action{
+    NONE,
+    OVERWRITE,
+    TRUEOVERWRITE,
+    MODIFY,
+    MAX
+  };
+
+  // define an action in terms of the destination map
+  void addAction(const AABB& r, Costmap2D *map, LayerActions::Action a, const char* file, unsigned int line);
+
+  // define an action from one map to another
+  void addAction(const AABB& src_rect, Costmap2D *src_map, const AABB& dst_rect, Costmap2D *dst_map, LayerActions::Action a, const char* file, unsigned int line);
+  void clear();
+
+  void copyTo(LayerActions& la_dest);
+  void appendActionTo(LayerActions& la_dest, int action_index);
+
+  void copyToWithMatchingDest(LayerActions& la_dest, Costmap2D* match_pattern);
+
+  int size() {return (int)v_actions.size();}
+
+  LayerActions::Action actionAt(int idx);
+  bool actionIs(int idx, Action a);
+  bool validIndex(int idx);
+
+  Costmap2D* destinationCostmapAt(int idx);
+  Costmap2D* sourceCostmapAt(int idx);
+
+  const AABB& sourceAABBAt(int idx);
+  const AABB& destinationAABBAt(int idx);
+
+
+  /**
+   * @brief Look at the sequence of actions and determine if some can be merged
+   * @param tolerance Some rectanges may not quite overlap but if they are within the given tolerance then we will merge them
+   */
+  void optimize(int tolerance=0);
+
+  void writeToFile(const char* filename);
+
+  // These define the actions that we have collected
+  // we have the source and destination rectangle with the corresponding maps
+  // and the action type
+  std::vector<AABB>                 v_source_rect;
+  std::vector<AABB>                 v_destination_rect;
+  std::vector<Costmap2D*>           v_source_maps;
+  std::vector<Costmap2D*>           v_destination_maps;
+  std::vector<LayerActions::Action> v_actions;
+
+  std::vector<std::string> v_action_file;
+  std::vector<int>         v_action_line;
+private:
+  AABB nullAABB;
+};
 
 class Layer
 {
@@ -69,7 +239,7 @@ public:
    * @brief Actually update the underlying costmap, only within the bounds
    *        calculated during UpdateBounds().
    */
-  virtual void updateCosts(Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) {}
+  virtual void updateCosts(LayerActions* layer_actions, Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) {}
 
   /** @brief Stop publishers. */
   virtual void deactivate() {}
@@ -81,15 +251,15 @@ public:
 
   virtual ~Layer() {}
 
-  /** 
-   * @brief Check to make sure all the data in the layer is up to date. 
-   *        If the layer is not up to date, then it may be unsafe to 
-   *        plan using the data from this layer, and the planner may 
-   *        need to know. 
+  /**
+   * @brief Check to make sure all the data in the layer is up to date.
+   *        If the layer is not up to date, then it may be unsafe to
+   *        plan using the data from this layer, and the planner may
+   *        need to know.
    *
    *        A layer's current state should be managed by the protected
    *        variable current_.
-   * @return Whether the data in the layer is up to date. 
+   * @return Whether the data in the layer is up to date.
    */
   bool isCurrent() const
   {

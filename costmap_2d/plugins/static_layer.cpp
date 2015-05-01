@@ -186,6 +186,8 @@ void StaticLayer::incomingMap(const nav_msgs::OccupancyGridConstPtr& new_map)
   height_ = size_y_;
   map_received_ = true;
   has_updated_data_ = true;
+
+//  markMapChanged(); // for internal caches
 }
 
 void StaticLayer::incomingUpdate(const map_msgs::OccupancyGridUpdateConstPtr& update)
@@ -205,6 +207,8 @@ void StaticLayer::incomingUpdate(const map_msgs::OccupancyGridUpdateConstPtr& up
     width_ = update->width;
     height_ = update->height;
     has_updated_data_ = true;
+
+//    markMapChanged(); // for internal caches
 }
 
 void StaticLayer::activate()
@@ -244,16 +248,40 @@ void StaticLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
   *max_y = std::max(my, *max_y);
   
   has_updated_data_ = false;
+
+//  markMapChanged();
 }
 
-void StaticLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)
+void StaticLayer::updateCosts(LayerActions* layer_actions, costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)
 {
   if (!map_received_)
     return;
+
   if (!use_maximum_)
+  {
     updateWithTrueOverwrite(master_grid, min_i, min_j, max_i, max_j);
+
+    if(layer_actions)
+      layer_actions->addAction(
+            AABB(min_i, min_j, max_i, max_j),
+            this,
+            AABB(min_i, min_j, max_i, max_j),
+            &master_grid,
+            LayerActions::TRUEOVERWRITE,
+            __FILE__, __LINE__);
+  }
   else
+  {
     updateWithMax(master_grid, min_i, min_j, max_i, max_j);
+    if(layer_actions)
+      layer_actions->addAction(
+            AABB(min_i, min_j, max_i, max_j),
+            this,
+            AABB(min_i, min_j, max_i, max_j),
+            &master_grid,
+            LayerActions::MAX,
+            __FILE__, __LINE__);
+  }
   current_ = true;
 }
 
