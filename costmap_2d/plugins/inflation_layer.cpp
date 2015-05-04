@@ -355,8 +355,6 @@ void InflationLayer::updateCosts(LayerActions* layer_actions, costmap_2d::Costma
   int problem_size = master_grid.getSizeInCellsX() * master_grid.getSizeInCellsY();
   int best_algorithm = algorithmSelect.selectAlgorithm(problem_size);
 
-  algorithmSelect.writeData("/tmp/alg_sel.txt");
-
   if(best_algorithm == ALG_PRIORITY_QUEUE)
   {
     DynamicAlgorithmSelect::Timer timer;
