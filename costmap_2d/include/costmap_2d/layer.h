@@ -38,14 +38,20 @@
 #define COSTMAP_2D_COSTMAP_2D_LAYER_H_
 
 #include <costmap_2d/costmap_2d.h>
+#include <costmap_2d/costmap_2d.h>
 #include <costmap_2d/layered_costmap.h>
 #include <string>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
+#include <vector>
+#include <string>
+#include <geometry_msgs/Point32.h>
 
 namespace costmap_2d
 {
 class LayeredCostmap;
+class Layer;
+class LayerActions;
 
 class Layer
 {
@@ -69,7 +75,7 @@ public:
    * @brief Actually update the underlying costmap, only within the bounds
    *        calculated during UpdateBounds().
    */
-  virtual void updateCosts(Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) {}
+  virtual void updateCosts(LayerActions* layer_actions, Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) {}
 
   /** @brief Stop publishers. */
   virtual void deactivate() {}
@@ -81,15 +87,15 @@ public:
 
   virtual ~Layer() {}
 
-  /** 
-   * @brief Check to make sure all the data in the layer is up to date. 
-   *        If the layer is not up to date, then it may be unsafe to 
-   *        plan using the data from this layer, and the planner may 
-   *        need to know. 
+  /**
+   * @brief Check to make sure all the data in the layer is up to date.
+   *        If the layer is not up to date, then it may be unsafe to
+   *        plan using the data from this layer, and the planner may
+   *        need to know.
    *
    *        A layer's current state should be managed by the protected
    *        variable current_.
-   * @return Whether the data in the layer is up to date. 
+   * @return Whether the data in the layer is up to date.
    */
   bool isCurrent() const
   {
