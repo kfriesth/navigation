@@ -273,7 +273,7 @@ void InflationLayer::updateCostsPQ(Costmap2D &master_grid, int min_i, int min_j,
   if (!enabled_)
     return;
 
-  // make sure the inflation queue is empty at the beginning of the cycle (should always be true)
+  //make sure the inflation queue is empty at the beginning of the cycle (should always be true)
   ROS_ASSERT_MSG(inflation_queue_.empty(), "The inflation queue must be empty at the beginning of inflation");
 
   unsigned char* master_array = master_grid.getCharMap();
@@ -530,7 +530,7 @@ inline void InflationLayer::enqueue(unsigned char* grid, unsigned int index, uns
                                             unsigned int src_x, unsigned int src_y)
 {
 
-  // set the cost of the cell being inserted
+  //set the cost of the cell being inserted
   if (!seen_[index])
   {
     //we compute our distance table one cell further than the inflation radius dictates so we can make the check below
@@ -560,7 +560,7 @@ void InflationLayer::computeCaches()
   if(cell_inflation_radius_ == 0)
     return;
 
-  // based on the inflation radius... compute distance and cost caches
+  //based on the inflation radius... compute distance and cost caches
   if(cell_inflation_radius_ != cached_cell_inflation_radius_)
   {
     deleteKernels();

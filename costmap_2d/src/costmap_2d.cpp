@@ -240,9 +240,9 @@ bool Costmap2D::copyCostmapWindow(const Costmap2D& map, double win_origin_x, dou
   return true;
 }
 
-
 Costmap2D& Costmap2D::operator=(const Costmap2D& map)
 {
+  
   //check for self assignement
   if (this == &map)
     return *this;
@@ -334,13 +334,13 @@ void Costmap2D::mapToWorld(unsigned int mx, unsigned int my, double& wx, double&
 
 bool Costmap2D::worldToMap(double wx, double wy, unsigned int& mx, unsigned int& my) const
 {
-  if(wx < origin_x_ || wy < origin_y_)
+  if (wx < origin_x_ || wy < origin_y_)
     return false;
 
   mx = (int)((wx - origin_x_) / resolution_);
   my = (int)((wy - origin_y_) / resolution_);
 
-  if(mx < size_x_ && my < size_y_)
+  if (mx < size_x_ && my < size_y_)
     return true;
 
   return false;
@@ -388,8 +388,8 @@ void Costmap2D::updateOrigin(double new_origin_x, double new_origin_y)
 {
   //project the new origin into the grid
   int cell_ox, cell_oy;
-  cell_ox = (int)((new_origin_x - origin_x_) / resolution_);
-  cell_oy = (int)((new_origin_y - origin_y_) / resolution_);
+  cell_ox = int((new_origin_x - origin_x_) / resolution_);
+  cell_oy = int((new_origin_y - origin_y_) / resolution_);
 
   //compute the associated world coordinates for the origin cell
   //because we want to keep things grid-aligned
@@ -401,7 +401,7 @@ void Costmap2D::updateOrigin(double new_origin_x, double new_origin_y)
   int size_x = size_x_;
   int size_y = size_y_;
 
-  // we need to compute the overlap of the new and existing windows
+  //we need to compute the overlap of the new and existing windows
   int lower_left_x, lower_left_y, upper_right_x, upper_right_y;
   lower_left_x = min(max(cell_ox, 0), size_x);
   lower_left_y = min(max(cell_oy, 0), size_y);
@@ -444,7 +444,7 @@ bool Costmap2D::setConvexPolygonCost(const std::vector<geometry_msgs::Point>& po
     MapLocation loc;
     if (!worldToMap(polygon[i].x, polygon[i].y, loc.x, loc.y))
     {
-      //("Polygon lies outside map bounds, so we can't fill it");
+      // ("Polygon lies outside map bounds, so we can't fill it");
       return false;
     }
     map_polygon.push_back(loc);
@@ -474,7 +474,7 @@ void Costmap2D::polygonOutlineCells(const std::vector<MapLocation>& polygon, std
   if (!polygon.empty())
   {
     unsigned int last_index = polygon.size() - 1;
-    // we also need to close the polygon by going from the last point to the first
+    //we also need to close the polygon by going from the last point to the first
     raytraceLine(cell_gatherer, polygon[last_index].x, polygon[last_index].y, polygon[0].x, polygon[0].y);
   }
 }
@@ -546,6 +546,7 @@ void Costmap2D::convexFillCells(const std::vector<MapLocation>& polygon, std::ve
       pt.x = x;
       pt.y = y;
       polygon_cells.push_back(pt);
+
     }
   }
 }

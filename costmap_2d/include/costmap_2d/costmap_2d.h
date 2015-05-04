@@ -68,7 +68,7 @@ struct MapLocation
  */
 class Costmap2D
 {
-  friend class CostmapTester;  //Need this for gtest to work correctly
+  friend class CostmapTester; //Need this for gtest to work correctly
 public:
   /**
    * @brief  Constructor for a costmap
@@ -481,10 +481,10 @@ protected:
         return;
       }
 
-      // otherwise y is dominant
+      //otherwise y is dominant
       int error_x = abs_dy / 2;
       bresenham2D(at, abs_dy, abs_dx, error_x, offset_dy, offset_dx, offset, (unsigned int)(scale * abs_dy));
-      
+ 
     }
 
 private:
