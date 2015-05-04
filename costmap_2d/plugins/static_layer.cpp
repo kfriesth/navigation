@@ -188,8 +188,6 @@ void StaticLayer::incomingMap(const nav_msgs::OccupancyGridConstPtr& new_map)
   height_ = size_y_;
   map_received_ = true;
   has_updated_data_ = true;
-
-//  markMapChanged(); // for internal caches
 }
 
 void StaticLayer::incomingUpdate(const map_msgs::OccupancyGridUpdateConstPtr& update)
@@ -209,8 +207,6 @@ void StaticLayer::incomingUpdate(const map_msgs::OccupancyGridUpdateConstPtr& up
     width_ = update->width;
     height_ = update->height;
     has_updated_data_ = true;
-
-//    markMapChanged(); // for internal caches
 }
 
 void StaticLayer::activate()
@@ -250,8 +246,6 @@ void StaticLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
   *max_y = std::max(my, *max_y);
   
   has_updated_data_ = false;
-
-//  markMapChanged();
 }
 
 void StaticLayer::updateCosts(LayerActions* layer_actions, costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)

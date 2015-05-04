@@ -320,8 +320,6 @@ void InflationLayer::updateCostsPQ(Costmap2D &master_grid, int min_i, int min_j,
     }
   }
 
-
-
   while (!inflation_queue_.empty())
   {
     //get the highest priority cell and pop it off the priority queue

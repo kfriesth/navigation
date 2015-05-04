@@ -58,4 +58,4 @@ const std::vector<geometry_msgs::Point>& Layer::getFootprint() const
   return layered_costmap_->getFootprint();
 }
 
-}  // end namespace costmap_2d
+} // end namespace costmap_2d

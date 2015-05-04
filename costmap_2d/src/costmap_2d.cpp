@@ -242,7 +242,7 @@ bool Costmap2D::copyCostmapWindow(const Costmap2D& map, double win_origin_x, dou
 
 Costmap2D& Costmap2D::operator=(const Costmap2D& map)
 {
-  
+
   //check for self assignement
   if (this == &map)
     return *this;

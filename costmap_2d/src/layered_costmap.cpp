@@ -128,8 +128,6 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
     }
   }
 
-  // actions.writeToFile("/tmp/actions.txt");
-
   bx0_ = x0;
   bxn_ = xn;
   by0_ = y0;
