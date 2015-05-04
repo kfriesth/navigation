@@ -91,7 +91,7 @@ public:
   virtual ~InflationLayer()
   {
     deleteKernels();
-    if (dsrv_)
+    if(dsrv_)
         delete dsrv_;
   }
 
@@ -152,7 +152,7 @@ public:
       cost = INSCRIBED_INFLATED_OBSTACLE;
     else
     {
-      // make sure cost falls off by Euclidean distance
+      //make sure cost falls off by Euclidean distance
       double euclidean_distance = distance * resolution_;
       double factor = exp(-1.0 * weight_ * (euclidean_distance - inscribed_radius_));
       cost = (unsigned char)((INSCRIBED_INFLATED_OBSTACLE - 1) * factor);
@@ -239,7 +239,7 @@ private:
   dynamic_reconfigure::Server<costmap_2d::InflationPluginConfig> *dsrv_;
   void reconfigureCB(costmap_2d::InflationPluginConfig &config, uint32_t level);
 
-  bool need_reinflation_;  ///< Indicates that the entire costmap should be reinflated next time around.
+  bool need_reinflation_; ///< Indicates that the entire costmap should be reinflated next time around.
 };
 
 }  // namespace costmap_2d

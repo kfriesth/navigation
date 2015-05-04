@@ -62,7 +62,7 @@ public:
      */
     void stop();
     /**
-     * @brief Determine the elapsed time in seconds
+     * @brief Determine the elapsed time in nanoseconds
      */
     double elapsed();
   private:

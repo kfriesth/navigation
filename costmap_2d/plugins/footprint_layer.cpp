@@ -108,11 +108,6 @@ namespace costmap_2d
     fl_max_y_ = *max_y;
   }
 
-  void FootprintLayer::updateCosts(Costmap2D &master_grid, int min_i, int min_j, int max_i, int max_j)
-  {
-    updateCosts(NULL, master_grid, min_i, min_j, max_i, max_j);
-  }
-
   void FootprintLayer::updateCosts(LayerActions* layer_actions, costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)
   {
     if(!enabled_) return;
@@ -134,4 +129,8 @@ namespace costmap_2d
     master_grid.setConvexPolygonCost(footprint_points, costmap_2d::FREE_SPACE);
   }
 
+  void FootprintLayer::updateCosts(Costmap2D &master_grid, int min_i, int min_j, int max_i, int max_j)
+  {
+    updateCosts(NULL, master_grid, min_i, min_j, max_i, max_j);
+  }
 }  // namespace costmap_2d

@@ -104,9 +104,9 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
   costmap_.worldToMapEnforceBounds(maxx_, maxy_, xn, yn);
 
   x0 = std::max(0, x0);
-  xn = std::min(static_cast<int>(costmap_.getSizeInCellsX()), xn + 1);
+  xn = std::min(int(costmap_.getSizeInCellsX()), xn + 1);
   y0 = std::max(0, y0);
-  yn = std::min(static_cast<int>(costmap_.getSizeInCellsY()), yn + 1);
+  yn = std::min(int(costmap_.getSizeInCellsY()), yn + 1);
 
   ROS_DEBUG("Updating area x: [%d, %d] y: [%d, %d]", x0, xn, y0, yn);
 
@@ -152,7 +152,7 @@ bool LayeredCostmap::isCurrent()
 void LayeredCostmap::setFootprint(const std::vector<geometry_msgs::Point>& footprint_spec)
 {
   footprint_ = footprint_spec;
-  costmap_2d::calculateMinAndMaxDistances(footprint_spec, inscribed_radius_, circumscribed_radius_);
+  costmap_2d::calculateMinAndMaxDistances( footprint_spec, inscribed_radius_, circumscribed_radius_ );
 
   for (vector<boost::shared_ptr<Layer> >::iterator plugin = plugins_.begin(); plugin != plugins_.end();
       ++plugin)

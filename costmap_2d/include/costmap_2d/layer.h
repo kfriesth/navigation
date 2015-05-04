@@ -75,6 +75,13 @@ public:
    * @brief Actually update the underlying costmap, only within the bounds
    *        calculated during UpdateBounds().
    */
+  virtual void updateCosts(Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) {}
+
+  
+  /**
+   * @brief Actually update the underlying costmap, only within the bounds
+   *        calculated during UpdateBounds(). Tracking where modifications are made.
+   */
   virtual void updateCosts(LayerActions* layer_actions, Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j) {}
 
   /** @brief Stop publishers. */
@@ -87,15 +94,15 @@ public:
 
   virtual ~Layer() {}
 
-  /**
+  /** 
    * @brief Check to make sure all the data in the layer is up to date.
    *        If the layer is not up to date, then it may be unsafe to
    *        plan using the data from this layer, and the planner may
-   *        need to know.
+   *        need to know. 
    *
    *        A layer's current state should be managed by the protected
    *        variable current_.
-   * @return Whether the data in the layer is up to date.
+   * @return Whether the data in the layer is up to date. 
    */
   bool isCurrent() const
   {
