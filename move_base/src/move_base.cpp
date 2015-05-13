@@ -53,7 +53,7 @@ namespace move_base {
     blp_loader_("nav_core", "nav_core::BaseLocalPlanner"),
     recovery_loader_("nav_core", "nav_core::RecoveryBehavior"),
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
-    runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false), new_global_plan_(false) {
+    runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false), new_global_plan_(false), wait_for_planner_(false) {
 
     as_ = new MoveBaseActionServer(ros::NodeHandle(), "move_base", boost::bind(&MoveBase::executeCb, this, _1), false);
 
@@ -656,7 +656,17 @@ namespace move_base {
 
       //run planner
       planner_plan_->clear();
+
+      if (state_ == CLEARING && recovery_behavior_enabled_)
+      {
+        while (recovery_index_ < recovery_behaviors_.size() )
+        {
+          ros::Duration(0.01).sleep();
+        }
+      }
+
       bool gotPlan = n.ok() && makePlan(temp_goal, *planner_plan_);
+      wait_for_planner_ = false;
 
       if(gotPlan){
         ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
@@ -687,6 +697,7 @@ namespace move_base {
         lock.lock();
         if(ros::Time::now() > attempt_end && runPlanner_){
           //we'll move into our obstacle clearing mode
+          wait_for_planner_ = true;
           state_ = CLEARING;
           publishZeroVelocity();
           recovery_trigger_ = PLANNING_R;
@@ -1038,6 +1049,10 @@ namespace move_base {
             as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid control. Even after executing recovery behaviors.");
           }
           else if(recovery_trigger_ == PLANNING_R){
+            if (wait_for_planner_)
+            {
+              break;
+            }
             ROS_ERROR("Aborting because a valid plan could not be found. Even after executing all recovery behaviors");
             as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid plan. Even after executing recovery behaviors.");
           }
