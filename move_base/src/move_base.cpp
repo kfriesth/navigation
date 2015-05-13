@@ -656,7 +656,7 @@ namespace move_base {
 
       //run planner
       planner_plan_->clear();
-
+/*
       if (state_ == CLEARING && recovery_behavior_enabled_)
       {
         while (recovery_index_ < recovery_behaviors_.size() )
@@ -664,11 +664,14 @@ namespace move_base {
           ros::Duration(0.01).sleep();
         }
       }
-
+*/
+      if (wait_for_planner_)
+        ros::Duration(5.0).sleep();
       bool gotPlan = n.ok() && makePlan(temp_goal, *planner_plan_);
-      wait_for_planner_ = false;
+//      wait_for_planner_ = false;
 
       if(gotPlan){
+        wait_for_planner_ = false;
         ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
         //pointer swap the plans under mutex (the controller will pull from latest_plan_)
         std::vector<geometry_msgs::PoseStamped>* temp_plan = planner_plan_;
@@ -1039,7 +1042,7 @@ namespace move_base {
           ROS_DEBUG_NAMED("move_base_recovery","All recovery behaviors have failed, locking the planner and disabling it.");
           //disable the planner thread
           boost::unique_lock<boost::mutex> lock(planner_mutex_);
-          runPlanner_ = false;
+    //      runPlanner_ = false;
           lock.unlock();
 
           ROS_DEBUG_NAMED("move_base_recovery","Something should abort after this.");
