@@ -422,11 +422,13 @@ public:
     */
   int& namedFlag(const std::string& flag_name);
   
-  boost::shared_mutex* getLock()
+  // Provide a typedef to ease future code maintenance
+  typedef boost::recursive_mutex mutex_t;
+  mutex_t* getMutex()
   {
     return access_;
   }
-
+  
 protected:
   /**
    * @brief  Copy a region of a source map into a destination map
@@ -548,7 +550,7 @@ private:
     return x > 0 ? 1.0 : -1.0;
   }
 
-  boost::shared_mutex* access_;
+  mutex_t* access_;
 protected:
   unsigned int size_x_;
   unsigned int size_y_;
