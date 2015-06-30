@@ -55,6 +55,8 @@
 #include <dynamic_reconfigure/server.h>
 #include <costmap_2d/ObstaclePluginConfig.h>
 #include <costmap_2d/footprint_layer.h>
+#include <std_msgs/Float64.h>
+
 
 #include <string>  // for string
 #include <vector>  // for vector<>
@@ -118,6 +120,12 @@ public:
    */
   void pointCloud2Callback(const sensor_msgs::PointCloud2ConstPtr& message,
                            const boost::shared_ptr<costmap_2d::ObservationBuffer>& buffer);
+
+  /**
+   * @brief A callback to handle localization confidence
+   * @param message The confidence
+   */
+  void poseConfidenceCallback(const std_msgs::Float64& message);
 
   // for testing purposes
   void addStaticObservation(costmap_2d::Observation& obs, bool marking, bool clearing);
@@ -210,6 +218,9 @@ private:
 
   std::list<TimeWorldPoint> time_world_points_; /// <@brief list of points in memory
 
+  float pose_confidence_;           /// <@brief current confidence in pose.
+  float pose_confidence_threshold_; /// <@brief below this threshold we will not remember obstacles.
+  ros::Subscriber pose_confidence_sub_;
 };
 
 }  // namespace costmap_2d

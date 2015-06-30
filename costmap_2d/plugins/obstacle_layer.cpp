@@ -67,6 +67,13 @@ void ObstacleLayer::onInitialize()
   obstacle_compare_tolerance_ = 0.0; // meters
   use_forgetful_version_ = true;     // flag
 
+  // Initial pose confidence and threshold before we remember new data
+  // Threshold set in costmap_2d/cfg/ObstaclePlugin.cfg
+  pose_confidence_ = 0;
+  pose_confidence_threshold_ = 1;
+
+  pose_confidence_sub_ = g_nh.subscribe("/slam/scan_match_score", 1, &ObstacleLayer::poseConfidenceCallback, this);
+
   bool track_unknown_space;
   nh.param("track_unknown_space", track_unknown_space, layered_costmap_->isTrackingUnknown());
   if(track_unknown_space)
@@ -263,6 +270,8 @@ void ObstacleLayer::reconfigureCB(costmap_2d::ObstaclePluginConfig &config, uint
   obstacle_queue_size_ = config.obstacle_queue_size;
   obstacle_compare_tolerance_ = config.obstacle_compare_tolerance;
   use_forgetful_version_ = config.enable_forget;
+
+  pose_confidence_threshold_ = config.pose_confidence_threshold;
 }
 
 void ObstacleLayer::laserScanCallback(const sensor_msgs::LaserScanConstPtr& message,
@@ -349,6 +358,11 @@ void ObstacleLayer::pointCloud2Callback(const sensor_msgs::PointCloud2ConstPtr& 
   buffer->lock();
   buffer->bufferCloud(*message);
   buffer->unlock();
+}
+
+void ObstacleLayer::poseConfidenceCallback(const std_msgs::Float64 &message)
+{
+  pose_confidence_ = message.data;
 }
 
 void ObstacleLayer::updateBounds(double robot_x, double robot_y, double robot_yaw, double* min_x,
@@ -680,7 +694,8 @@ void ObstacleLayer::forgetfulUpdateBounds(double robot_x, double robot_y, double
       writeTimeWorldPoint(p, LETHAL_OBSTACLE, &layer_min_x, &layer_min_y, &layer_max_x, &layer_max_y);
 
       // remember this data
-      time_world_points_.push_front(p);
+      if(pose_confidence_ > pose_confidence_threshold_)
+        time_world_points_.push_front(p);
     }
   }
 
