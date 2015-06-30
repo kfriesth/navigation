@@ -72,7 +72,7 @@ void ObstacleLayer::onInitialize()
   pose_confidence_ = 0;
   pose_confidence_threshold_ = 1;
 
-  pose_confidence_sub_ = g_nh.subscribe("/slam/scan_match_score", 1, &ObstacleLayer::poseConfidenceCallback, this);
+  pose_confidence_sub_ = g_nh.subscribe("slam/scan_match_score", 1, &ObstacleLayer::poseConfidenceCallback, this);
 
   bool track_unknown_space;
   nh.param("track_unknown_space", track_unknown_space, layered_costmap_->isTrackingUnknown());
