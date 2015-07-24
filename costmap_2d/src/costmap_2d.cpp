@@ -66,6 +66,8 @@ void Costmap2D::deleteMaps()
   if(costmap_)
     delete[] costmap_;
   costmap_ = NULL;
+  
+  child_maps_.clear();
 }
 
 void Costmap2D::initMaps(unsigned int size_x, unsigned int size_y)
@@ -74,6 +76,8 @@ void Costmap2D::initMaps(unsigned int size_x, unsigned int size_y)
   if (costmap_)
     delete[] costmap_;
   costmap_ = new unsigned char[size_x * size_y];
+  
+  child_maps_.clear();
 }
 
 
@@ -116,16 +120,21 @@ int& Costmap2D::namedFlag(const std::string& flag_name)
 void Costmap2D::resizeMap(unsigned int size_x, unsigned int size_y, double resolution,
                           double origin_x, double origin_y)
 {
+  boost::unique_lock < boost::shared_mutex > lock(*access_);
   size_x_ = size_x;
   size_y_ = size_y;
   resolution_ = resolution;
   origin_x_ = origin_x;
   origin_y_ = origin_y;
 
-  initMaps(size_x, size_y);
+  if (costmap_)
+    delete[] costmap_;
+  costmap_ = new unsigned char[size_x * size_y];
+
+  child_maps_.clear();
 
   // reset our maps to have no information
-  resetMaps();
+  memset(costmap_, default_value_, size_x_ * size_y_ * sizeof(unsigned char));
 }
 
 
@@ -317,9 +326,6 @@ bool Costmap2D::copyCostmapWindow(const Costmap2D& map, double win_origin_x, dou
     return false;
   }
 
-  //clean up old data
-  deleteMaps();
-
   //compute the bounds of our new map
   unsigned int lower_left_x, lower_left_y, upper_right_x, upper_right_y;
   if (!map.worldToMap(win_origin_x, win_origin_y, lower_left_x, lower_left_y)
@@ -329,29 +335,33 @@ bool Costmap2D::copyCostmapWindow(const Costmap2D& map, double win_origin_x, dou
     return false;
   }
 
-  size_x_ = upper_right_x - lower_left_x;
-  size_y_ = upper_right_y - lower_left_y;
-  resolution_ = map.resolution_;
-  origin_x_ = win_origin_x;
-  origin_y_ = win_origin_y;
+  {
+    boost::unique_lock < boost::shared_mutex > lock(*access_);
+    size_x_ = upper_right_x - lower_left_x;
+    size_y_ = upper_right_y - lower_left_y;
+    resolution_ = map.resolution_;
+    origin_x_ = win_origin_x;
+    origin_y_ = win_origin_y;
 
-  //initialize our various maps and reset markers for inflation
-  initMaps(size_x_, size_y_);
+    //initialize our various maps and reset markers for inflation
+    if (costmap_)
+      delete[] costmap_;
+    costmap_ = new unsigned char[size_x_ * size_y_];
+    
+    child_maps_.clear();
 
-  //copy the window of the static map and the costmap that we're taking
-  copyMapRegion(map.costmap_, lower_left_x, lower_left_y, map.size_x_, costmap_, 0, 0, size_x_, size_x_, size_y_);
+    //copy the window of the static map and the costmap that we're taking
+    copyMapRegion(map.costmap_, lower_left_x, lower_left_y, map.size_x_, costmap_, 0, 0, size_x_, size_x_, size_y_);
+  }
   return true;
 }
 
 Costmap2D& Costmap2D::operator=(const Costmap2D& map)
 {
-
   //check for self assignement
   if (this == &map)
     return *this;
-
-  //clean up old data
-  deleteMaps();
+  boost::unique_lock < boost::shared_mutex > lock(*access_);
 
   size_x_ = map.size_x_;
   size_y_ = map.size_y_;
@@ -359,8 +369,11 @@ Costmap2D& Costmap2D::operator=(const Costmap2D& map)
   origin_x_ = map.origin_x_;
   origin_y_ = map.origin_y_;
 
-  //initialize our various maps
-  initMaps(size_x_, size_y_);
+  if (costmap_)
+    delete[] costmap_;
+  costmap_ = new unsigned char[size_x_ * size_y_];
+  
+  child_maps_.clear();
 
   //copy the cost map
   memcpy(costmap_, map.costmap_, size_x_ * size_y_ * sizeof(unsigned char));
@@ -522,7 +535,7 @@ void Costmap2D::updateOrigin(double new_origin_x, double new_origin_y)
   copyMapRegion(costmap_, lower_left_x, lower_left_y, size_x_, local_map, 0, 0, cell_size_x, cell_size_x, cell_size_y);
 
   //now we'll set the costmap to be completely unknown if we track unknown space
-  resetMaps();
+  memset(costmap_, default_value_, size_x_ * size_y_ * sizeof(unsigned char));
 
   //update the origin with the appropriate world coordinates
   origin_x_ = new_grid_ox;
@@ -534,6 +547,8 @@ void Costmap2D::updateOrigin(double new_origin_x, double new_origin_y)
 
   //now we want to copy the overlapping information back into the map, but in its new location
   copyMapRegion(local_map, 0, 0, cell_size_x, costmap_, start_x, start_y, size_x_, cell_size_x, cell_size_y);
+
+  child_maps_.clear();
 
   //make sure to clean up
   delete[] local_map;
