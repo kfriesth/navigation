@@ -84,6 +84,9 @@ namespace move_base {
     private_nh.param("oscillation_timeout", oscillation_timeout_, 0.0);
     private_nh.param("oscillation_distance", oscillation_distance_, 0.5);
 
+    // Distance movement required to decide we should reset the recovery index
+    private_nh.param("recovery_reset_distance", recovery_reset_distance_, oscillation_distance_);
+
     //set up plan triple buffer
     planner_plan_ = new std::vector<geometry_msgs::PoseStamped>();
     latest_plan_ = new std::vector<geometry_msgs::PoseStamped>();
@@ -200,8 +203,8 @@ namespace move_base {
     state_ = PLANNING;
 
     //we'll start executing recovery behaviors at the beginning of our list
-    recovery_index_ = 0;
-    active_recovery_index_ = -1;
+    const bool force = true;
+    resetRecoveryIndex(force);
 
     //we're all set up now so we can start the action server
     as_->start();
@@ -284,8 +287,7 @@ namespace move_base {
         runPlanner_ = false;
         recovery_cleanup_requested_ = true;
         state_ = PLANNING;
-        recovery_index_ = 0;
-        active_recovery_index_ = -1;
+        resetRecoveryIndex();
         recovery_trigger_ = PLANNING_R;
         publishZeroVelocity();
 
@@ -833,8 +835,7 @@ namespace move_base {
 
           //we'll make sure that we reset our state for the next execution cycle
           revertRecoveryChanges();
-          recovery_index_ = 0;
-          active_recovery_index_ = -1;
+          resetRecoveryIndex();
           state_ = PLANNING;
 
           //we have a new goal so make sure the planner is awake
@@ -875,8 +876,7 @@ namespace move_base {
 
         //we want to go back to the planning state for the next execution cycle
         revertRecoveryChanges();
-        recovery_index_ = 0;
-        active_recovery_index_ = -1;
+        resetRecoveryIndex();
         state_ = PLANNING;
 
         //we have a new goal so make sure the planner is awake
@@ -948,10 +948,8 @@ namespace move_base {
     //we need to be able to publish velocity commands
     geometry_msgs::Twist cmd_vel;
 
-    tf::Stamped<tf::Pose> global_pose;
-    planner_costmap_ros_->getRobotPose(global_pose);
     geometry_msgs::PoseStamped current_position;
-    tf::poseStampedTFToMsg(global_pose, current_position);
+    getCurrentPose(current_position);
 
     //check to see if we've moved far enough to reset our oscillation timeout
     if(distance(current_position, oscillation_pose_) >= oscillation_distance_)
@@ -963,8 +961,7 @@ namespace move_base {
       if(recovery_trigger_ == OSCILLATION_R)
       {
         revertRecoveryChanges();
-        recovery_index_ = 0;
-        active_recovery_index_ = -1;
+        resetRecoveryIndex();
       }
     }
 
@@ -1062,8 +1059,7 @@ namespace move_base {
            * from CONTROLLING_R or have found a plan after a recovery and executed it.
            * This allows for multiple recovery attempts if the robot moves (as opposed to one only).
            */
-          recovery_index_ = 0;
-          active_recovery_index_ = -1;
+          resetRecoveryIndex();
 
           // Reset the failed goal record (so that if we fail on that goal again in the future we show a log message)
           last_failed_goal_.pose.position.x = FLT_MAX;
@@ -1109,6 +1105,11 @@ namespace move_base {
           ROS_DEBUG_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_, recovery_behaviors_.size());
           active_recovery_index_ = recovery_index_;
           recovery_behaviors_[recovery_index_]->runBehavior();
+
+          // wherever we are after executing the recovery is the current recovery pose
+          // this means that if we hand control back to the tracker and it tries to
+          // reset the recovery index, it will need to be a distance away from this position
+          recordRecoveryPose();
 
           //we at least want to give the robot some time to stop oscillating after executing the behavior
           last_oscillation_reset_ = ros::Time::now();
@@ -1315,8 +1316,7 @@ namespace move_base {
     // Reset statemachine
     revertRecoveryChanges();
     state_ = PLANNING;
-    recovery_index_ = 0;
-    active_recovery_index_ = -1;
+    resetRecoveryIndex();
     recovery_trigger_ = PLANNING_R;
     publishZeroVelocity();
 
@@ -1372,10 +1372,8 @@ namespace move_base {
     if (as_->isActive() )
     {
       //update feedback to correspond to our curent position
-      tf::Stamped<tf::Pose> global_pose;
-      planner_costmap_ros_->getRobotPose(global_pose);
       geometry_msgs::PoseStamped current_position;
-      tf::poseStampedTFToMsg(global_pose, current_position);
+      getCurrentPose(current_position);
 
       //push the feedback out
       move_base_msgs::MoveBaseFeedback feedback;
@@ -1398,4 +1396,49 @@ namespace move_base {
     // allow cancels to be recognized by components
     goal_manager_->setActiveGoal(as_->isActive());
   }
+
+  /**
+   * @brief Reset the recovery index as long as we have moved
+   * @param force Force the reset even if we have not moved
+   */
+  void MoveBase::resetRecoveryIndex(bool force)
+  {
+    if (force)
+    {
+      recovery_index_ = 0;
+      active_recovery_index_ = -1;
+    }
+    else
+    {
+      geometry_msgs::PoseStamped current_pose;
+      getCurrentPose(current_pose);
+
+      if (distance(current_pose, recovery_pose_) >= recovery_reset_distance_)
+      {
+        recovery_index_ = 0;
+        active_recovery_index_ = -1;
+      }
+    }
+  }
+
+  /**
+   * @brief Record current pose to be used when deciding if we need to reset
+   *        the recovery index
+   */
+  void MoveBase::recordRecoveryPose()
+  {
+    getCurrentPose(recovery_pose_);
+  }
+
+  /**
+   * @brief Get the current pose
+   * @param current_pose The current pose
+   */
+  void MoveBase::getCurrentPose(geometry_msgs::PoseStamped& current_pose)
+  {
+    tf::Stamped<tf::Pose> global_pose;
+    planner_costmap_ros_->getRobotPose(global_pose);
+    tf::poseStampedTFToMsg(global_pose, current_pose);
+  }
+
 };

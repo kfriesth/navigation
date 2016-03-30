@@ -229,6 +229,23 @@ namespace move_base {
        */
       void asPreemptCallback();
 
+      /**
+       * @brief Reset the recovery index as long as we have moved
+       * @param force Force the reset even if we have not moved
+       */
+      void resetRecoveryIndex(bool force = false);
+
+      /**
+       * @brief Get the current pose
+       * @param current_pose The current pose
+       */
+      void getCurrentPose(geometry_msgs::PoseStamped& current_pose);
+
+      /**
+       * @brief Record current pose to be used when deciding if we need to reset
+       *        the recovery index
+       */
+      void recordRecoveryPose();
 
       tf::TransformListener& tf_;
 
@@ -293,6 +310,18 @@ namespace move_base {
       ros::Timer as_feedback_timer_;
 
       nav_core::NavGoalMananger::Ptr goal_manager_;
+
+      /**
+       * @brief The robot must move at least this value from where the last recovery
+       *        finished to have the recovery index reset
+       */
+      double recovery_reset_distance_;
+
+      /**
+       * @brief The pose when we finished recovery. Used to decide if we can
+       *        reset the recovery index or we should cycle through all behaviours
+       */
+      geometry_msgs::PoseStamped recovery_pose_;
   };
 };
 #endif
