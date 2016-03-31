@@ -47,7 +47,7 @@
 
 #include <nav_core/base_local_planner.h>
 #include <nav_core/base_global_planner.h>
-#include <nav_core/recovery_behavior.h>
+#include <nav_core/cpr_recovery_behavior.h>
 #include <nav_core/nav_goal_manager.h>
 
 #include <geometry_msgs/PoseStamped.h>
@@ -144,11 +144,6 @@ namespace move_base {
        * @return True if the recovery behaviors were loaded successfully, false otherwise
        */
       bool loadRecoveryBehaviors(ros::NodeHandle node);
-
-      /**
-       * @brief  Loads the default recovery behaviors for the navigation stack
-       */
-      void loadDefaultRecoveryBehaviors();
 
       /**
        * @brief  Clears obstacles within a window around the robot
@@ -258,7 +253,7 @@ namespace move_base {
       std::map<std::string, boost::shared_ptr<nav_core::BaseGlobalPlanner> > global_planner_cache_;
       std::string robot_base_frame_, global_frame_;
 
-      std::vector<boost::shared_ptr<nav_core::RecoveryBehavior> > recovery_behaviors_;
+      std::vector<boost::shared_ptr<nav_core::CPRRecoveryBehavior> > recovery_behaviors_;
       unsigned int recovery_index_;
       int active_recovery_index_;  // Intentionally signed
 
@@ -279,7 +274,7 @@ namespace move_base {
       geometry_msgs::PoseStamped oscillation_pose_;
       pluginlib::ClassLoader<nav_core::BaseGlobalPlanner> bgp_loader_;
       pluginlib::ClassLoader<nav_core::BaseLocalPlanner> blp_loader_;
-      pluginlib::ClassLoader<nav_core::RecoveryBehavior> recovery_loader_;
+      pluginlib::ClassLoader<nav_core::CPRRecoveryBehavior> recovery_loader_;
 
       //set up plan triple buffer
       std::vector<geometry_msgs::PoseStamped>* planner_plan_;

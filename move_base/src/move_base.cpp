@@ -52,7 +52,7 @@ namespace move_base {
     planner_costmap_ros_(NULL), controller_costmap_ros_(NULL),
     bgp_loader_("nav_core", "nav_core::BaseGlobalPlanner"),
     blp_loader_("nav_core", "nav_core::BaseLocalPlanner"),
-    recovery_loader_("nav_core", "nav_core::RecoveryBehavior"),
+    recovery_loader_("nav_core", "nav_core::CPRRecoveryBehavior"),
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
     runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false),
     new_global_plan_(false), recovery_cleanup_requested_(false)
@@ -194,9 +194,10 @@ namespace move_base {
       controller_costmap_ros_->stop();
     }
 
-    //load any user specified recovery behaviors, and if that fails load the defaults
-    if(!loadRecoveryBehaviors(private_nh)){
-      loadDefaultRecoveryBehaviors();
+    //load user specified recovery behaviors
+    if(!loadRecoveryBehaviors(private_nh))
+    {
+      ROS_ERROR("Failed to load Recovery Behaviors");
     }
 
     //initially, we'll need to make a plan
@@ -1104,23 +1105,23 @@ namespace move_base {
         if(recovery_behavior_enabled_ && recovery_index_ < recovery_behaviors_.size()){
           ROS_DEBUG_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_, recovery_behaviors_.size());
           active_recovery_index_ = recovery_index_;
-          recovery_behaviors_[recovery_index_]->runBehavior();
 
-          // wherever we are after executing the recovery is the current recovery pose
+          // attempt the recovery behaviour and if it was successful, go back to planning
+          if (recovery_behaviors_[recovery_index_]->attemptBehavior())
+          {
+            ROS_DEBUG_NAMED("move_base_recovery","Going back to planning state");
+
+            runPlanner_ = true;
+            state_ = PLANNING;
+          }
+
+          // wherever we are after attempting the recovery is the current recovery pose
           // this means that if we hand control back to the tracker and it tries to
           // reset the recovery index, it will need to be a distance away from this position
           recordRecoveryPose();
 
           //we at least want to give the robot some time to stop oscillating after executing the behavior
           last_oscillation_reset_ = ros::Time::now();
-
-          //we'll check if the recovery behavior actually worked
-          ROS_DEBUG_NAMED("move_base_recovery","Going back to planning state");
-          /* Now that recovery process is finished, we can reset the flag
-           * to allow the planner thread to proceed.
-           */
-          runPlanner_ = true;
-          state_ = PLANNING;
 
           //update the index of the next recovery behavior that we'll try
           recovery_index_++;
@@ -1153,6 +1154,7 @@ namespace move_base {
           // Record the failed goal so in the next cycle we don't log a new message
           last_failed_goal_ = planner_goal_;
 
+          resetRecoveryIndex(recovery_behavior_enabled_);  // force the index to zero for roll around
           resetState();
           return true;
         }
@@ -1223,7 +1225,7 @@ namespace move_base {
               }
             }
 
-            boost::shared_ptr<nav_core::RecoveryBehavior> behavior(recovery_loader_.createInstance(behavior_list[i]["type"]));
+            boost::shared_ptr<nav_core::CPRRecoveryBehavior> behavior(recovery_loader_.createInstance(behavior_list[i]["type"]));
 
             //shouldn't be possible, but it won't hurt to check
             if(behavior.get() == NULL){
@@ -1234,6 +1236,7 @@ namespace move_base {
             behavior->setGoalManager(goal_manager_);
             //initialize the recovery behavior with its name
             behavior->initialize(behavior_list[i]["name"], &tf_, planner_costmap_ros_, controller_costmap_ros_);
+            behavior->setUp();
 
             //tell the behaviors how to access the planners
             nav_core::BaseLocalPlanner::FetchFunction get_local = boost::bind(&MoveBase::getCurrentLocalPlannerPlugin, this);
@@ -1263,46 +1266,6 @@ namespace move_base {
 
     //if we've made it here... we've constructed a recovery behavior list successfully
     return true;
-  }
-
-  //we'll load our default recovery behaviors here
-  void MoveBase::loadDefaultRecoveryBehaviors(){
-    recovery_behaviors_.clear();
-    try{
-      //we need to set some parameters based on what's been passed in to us to maintain backwards compatibility
-      ros::NodeHandle n("~");
-      n.setParam("conservative_reset/reset_distance", conservative_reset_dist_);
-      n.setParam("aggressive_reset/reset_distance", circumscribed_radius_ * 4);
-
-      //first, we'll load a recovery behavior to clear the costmap
-      boost::shared_ptr<nav_core::RecoveryBehavior> cons_clear(recovery_loader_.createInstance("clear_costmap_recovery/ClearCostmapRecovery"));
-      cons_clear->setGoalManager(goal_manager_);
-      cons_clear->initialize("conservative_reset", &tf_, planner_costmap_ros_, controller_costmap_ros_);
-      recovery_behaviors_.push_back(cons_clear);
-
-      //next, we'll load a recovery behavior to rotate in place
-      boost::shared_ptr<nav_core::RecoveryBehavior> rotate(recovery_loader_.createInstance("rotate_recovery/RotateRecovery"));
-      if(clearing_rotation_allowed_){
-        rotate->setGoalManager(goal_manager_);
-        rotate->initialize("rotate_recovery", &tf_, planner_costmap_ros_, controller_costmap_ros_);
-        recovery_behaviors_.push_back(rotate);
-      }
-
-      //next, we'll load a recovery behavior that will do an aggressive reset of the costmap
-      boost::shared_ptr<nav_core::RecoveryBehavior> ags_clear(recovery_loader_.createInstance("clear_costmap_recovery/ClearCostmapRecovery"));
-      ags_clear->setGoalManager(goal_manager_);
-      ags_clear->initialize("aggressive_reset", &tf_, planner_costmap_ros_, controller_costmap_ros_);
-      recovery_behaviors_.push_back(ags_clear);
-
-      //we'll rotate in-place one more time
-      if(clearing_rotation_allowed_)
-        recovery_behaviors_.push_back(rotate);
-    }
-    catch(pluginlib::PluginlibException& ex){
-      ROS_FATAL("Failed to load a plugin. This should not happen on default recovery behaviors. Error: %s", ex.what());
-    }
-
-    return;
   }
 
   void MoveBase::resetState(){
@@ -1361,7 +1324,9 @@ namespace move_base {
 
   void MoveBase::revertRecoveryChanges()
   {
-    if(recovery_behavior_enabled_ && active_recovery_index_ >= 0)
+    if(recovery_behavior_enabled_ &&
+       active_recovery_index_ >= 0 &&
+       active_recovery_index_ < recovery_behaviors_.size())
     {
       recovery_behaviors_[active_recovery_index_]->revertChanges();
     }
@@ -1406,7 +1371,6 @@ namespace move_base {
     if (force)
     {
       recovery_index_ = 0;
-      active_recovery_index_ = -1;
     }
     else
     {
@@ -1416,9 +1380,9 @@ namespace move_base {
       if (distance(current_pose, recovery_pose_) >= recovery_reset_distance_)
       {
         recovery_index_ = 0;
-        active_recovery_index_ = -1;
       }
     }
+    active_recovery_index_ = -1;
   }
 
   /**
