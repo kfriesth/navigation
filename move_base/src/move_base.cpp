@@ -738,7 +738,7 @@ namespace move_base {
       }
       //if we didn't get a plan and we are in the planning state (the robot isn't moving)
       else if(state_==PLANNING){
-        ROS_DEBUG_NAMED("move_base_plan_thread","No Plan...");
+        ROS_INFO("move_base_plan_thread","No Plan...");
         ros::Time attempt_end = last_valid_plan_ + ros::Duration(planner_patience_);
 
         //check if we've tried to make a plan for over our time limit
@@ -1092,7 +1092,7 @@ namespace move_base {
           last_failed_goal_.pose.position.x = FLT_MAX;
         }
         else {
-          ROS_DEBUG_NAMED("move_base", "The local planner could not find a valid plan.");
+          ROS_INFO("move_base", "The local planner could not find a valid plan.");
           ros::Time attempt_end = last_valid_control_ + ros::Duration(controller_patience_);
 
           //check if we've tried to find a valid control for longer than our time limit
@@ -1121,12 +1121,15 @@ namespace move_base {
 
       //we'll try to clear out space with any user-provided recovery behaviors
       case CLEARING:
-        ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
+        ROS_INFO("move_base","In clearing/recovery state");
         if (planner_)
         {
           // This will invoke the resetPlanner method when recovery is called.
           planner_->resetPlanner();
         }
+
+        ROS_INFO("recovery_index: %i, active_recovery_index: %i", recovery_index_, active_recovery_index_);
+
         //we'll invoke whatever recovery behavior we're currently on if they're enabled
         if(recovery_behavior_enabled_ && recovery_index_ < recovery_behaviors_.size()){
           ROS_DEBUG_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_, recovery_behaviors_.size());
