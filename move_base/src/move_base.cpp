@@ -55,7 +55,7 @@ namespace move_base {
     recovery_loader_("nav_core", "nav_core::RecoveryBehavior"),
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
     runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false),
-    new_global_plan_(false), recovery_cleanup_requested_(false)
+    new_global_plan_(false), recovery_cleanup_requested_(false), nav_core_state_(new nav_core::State)
   {
     goal_manager_.reset(new nav_core::NavGoalMananger);
 
@@ -166,6 +166,7 @@ namespace move_base {
       ROS_INFO("Created local_planner %s", local_planner.c_str());
       tc_->setGoalManager(goal_manager_);
       tc_->initialize(blp_loader_.getName(local_planner), &tf_, controller_costmap_ros_);
+
     } catch (const pluginlib::PluginlibException& ex)
     {
       ROS_FATAL("Failed to create the %s planner, are you sure it is properly registered and that the containing library is built? Exception: %s", local_planner.c_str(), ex.what());
@@ -212,6 +213,11 @@ namespace move_base {
 
     // Create and start the timer for publishing action server feedback
     as_feedback_timer_ = nh.createTimer(ros::Duration(0.05), &MoveBase::asFeedbackTimerCallback, this);
+
+    nav_core_state_->global_costmap_ = planner_costmap_ros_;
+    nav_core_state_->local_costmap_ = controller_costmap_ros_;
+    nav_core_state_->global_planner_ = planner_;
+    nav_core_state_->local_planner_ = tc_;
   }
 
   void MoveBase::reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level){
@@ -335,6 +341,10 @@ namespace move_base {
     }
 
     last_config_ = config;
+
+    // planners could have changes so updating pointers
+    nav_core_state_->global_planner_ = planner_;
+    nav_core_state_->local_planner_ = tc_;
   }
 
   void MoveBase::goalCB(const geometry_msgs::PoseStamped::ConstPtr& goal){
@@ -1370,6 +1380,7 @@ namespace move_base {
       ros::Time t = ros::Time::now();
       global_planner_cache_.insert(std::make_pair(plugin_name, bgp_loader_.createInstance(plugin_name) ) );
       global_planner_cache_[plugin_name]->setGoalManager(goal_manager_);
+      global_planner_cache_[plugin_name]->setNavCoreState(nav_core_state_);
       global_planner_cache_[plugin_name]->initialize(bgp_loader_.getName(plugin_name), planner_costmap_ros_);
       ROS_DEBUG("Created new global planner plugin %s in %f seconds.", plugin_name.c_str(), (ros::Time::now() - t).toSec() );
     }

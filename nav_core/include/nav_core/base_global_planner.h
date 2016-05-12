@@ -42,6 +42,7 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
 #include "nav_core/nav_goal_manager.h"
+#include "nav_core/nav_core_state.h"
 
 namespace nav_core {
   /**
@@ -86,6 +87,15 @@ namespace nav_core {
       }
 
       /**
+       * Set the common state
+       * @param navcore_state common state with pointers to planners and costmaps
+       */
+      virtual void setNavCoreState(nav_core::State::Ptr navcore_state)
+      {
+        navcore_state_ = navcore_state;
+      }
+
+      /**
        * @brief  Virtual destructor for the interface
        */
       virtual ~BaseGlobalPlanner(){}
@@ -94,6 +104,12 @@ namespace nav_core {
        * @brief Common goal goal manager
        */
       NavGoalMananger::Ptr goal_manager_;
+
+      /**
+       * @brief Common state object with pointers to planners and costmaps
+       */
+      nav_core::State::Ptr navcore_state_;
+
 
     protected:
       BaseGlobalPlanner(){}
