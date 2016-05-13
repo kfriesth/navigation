@@ -56,10 +56,11 @@ namespace base_local_planner {
 
     //if the center point is LETHAL or INSCRIBED the footprint must be colliding
     unsigned char cost = costmap_.getCost(cell_x, cell_y);
-    //if(cost == LETHAL_OBSTACLE || cost == INSCRIBED_INFLATED_OBSTACLE)
-    if(cost == LETHAL_OBSTACLE || cost == INSCRIBED_INFLATED_OBSTACLE || cost == NO_INFORMATION)
+    if(cost == LETHAL_OBSTACLE || cost == INSCRIBED_INFLATED_OBSTACLE)
+    {
       return -1.0;
-
+    }
+    
     //if number of points in the footprint is less than 3, we'll just assume a point robot
     if(footprint.size() < 3){
       return cost;
@@ -132,8 +133,8 @@ namespace base_local_planner {
   double CostmapModel::pointCost(int x, int y){
     unsigned char cost = costmap_.getCost(x, y);
     //if the cell is in an obstacle the path is invalid
-    //if(cost == LETHAL_OBSTACLE){
-    if(cost == LETHAL_OBSTACLE || cost == NO_INFORMATION){
+    if(cost == LETHAL_OBSTACLE)
+    {
       return -1;
     }
 

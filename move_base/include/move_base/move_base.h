@@ -49,6 +49,7 @@
 #include <nav_core/base_global_planner.h>
 #include <nav_core/recovery_behavior.h>
 #include <nav_core/nav_goal_manager.h>
+#include <nav_core/nav_core_state.h>
 
 #include <geometry_msgs/PoseStamped.h>
 #include <costmap_2d/costmap_2d_ros.h>
@@ -326,6 +327,11 @@ namespace move_base {
       ros::Timer diagnostic_timer_;
       std::string diag_msg_;
       char diag_level_;
+
+      /**
+       * @brief Smart pointer to container object to share costmaps and planners
+       */
+      nav_core::State::Ptr nav_core_state_;
   };
 };
 #endif
