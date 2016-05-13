@@ -55,7 +55,8 @@ namespace move_base {
     recovery_loader_("nav_core", "nav_core::RecoveryBehavior"),
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
     runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false),
-    new_global_plan_(false), recovery_cleanup_requested_(false)
+    new_global_plan_(false), recovery_cleanup_requested_(false),
+    diag_level_(diagnostic_msgs::DiagnosticStatus::OK), diag_msg_("Initialized.")
   {
     goal_manager_.reset(new nav_core::NavGoalMananger);
 
@@ -212,6 +213,13 @@ namespace move_base {
 
     // Create and start the timer for publishing action server feedback
     as_feedback_timer_ = nh.createTimer(ros::Duration(0.05), &MoveBase::asFeedbackTimerCallback, this);
+
+    // Set up the diagnostic updater
+    diagnostic_updater_.setHardwareID("none");
+    diagnostic_updater_.add("End goal validator", this,
+        &MoveBase::diagnosticCallback);
+    diagnostic_timer_ = nh.createTimer(ros::Duration(1.0),
+        &MoveBase::updaterTimerCallback, this);
   }
 
   void MoveBase::reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level){
@@ -346,6 +354,17 @@ namespace move_base {
 
     action_goal_pub_.publish(action_goal);
   }
+
+  void MoveBase::updaterTimerCallback(const ros::TimerEvent&)
+  {
+    diagnostic_updater_.update();
+  }
+
+  void MoveBase::diagnosticCallback(diagnostic_updater::DiagnosticStatusWrapper &stat)
+  {
+    stat.summary(diag_level_, diag_msg_);
+  }
+
 
   void MoveBase::clearCostmapWindows(double size_x, double size_y){
     tf::Stamped<tf::Pose> global_pose;
@@ -547,7 +566,7 @@ namespace move_base {
     tc_.reset();
   }
 
-  bool MoveBase::makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan){
+  bool MoveBase::makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan, int& planner_status){
     boost::unique_lock< boost::recursive_mutex > cm_lock(clear_costmap_mutex_);
 
     //check if the costmap is current before planning on it
@@ -579,7 +598,7 @@ namespace move_base {
 
     // NOTE: The implementation of makePlan is responsible for locking the costmap
     //if the planner fails or returns a zero length plan, planning failed
-    if(!planner_->makePlan(start, goal, plan) || plan.empty()){
+    if(!planner_->makePlan(start, goal, plan, planner_status) || plan.empty()){
       ROS_DEBUG_NAMED("move_base","Failed to find a  plan to point (%.2f, %.2f)", goal.pose.position.x, goal.pose.position.y);
       return false;
     }
@@ -688,10 +707,13 @@ namespace move_base {
 
       //run planner
       planner_plan_->clear();
-      bool gotPlan = n.ok() && makePlan(planned_goal, *planner_plan_);
+      int planner_status;
+      bool gotPlan = n.ok() && makePlan(planned_goal, *planner_plan_, planner_status);
 
       if(gotPlan){
         ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
+        diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
+        diag_msg_ = "End goal valid";
         //pointer swap the plans under mutex (the controller will pull from latest_plan_)
         std::vector<geometry_msgs::PoseStamped>* temp_plan = planner_plan_;
 
@@ -754,9 +776,20 @@ namespace move_base {
            * disabled). We will reset this flag to true after recovery is done.
            */
           runPlanner_ = false;
-          state_ = CLEARING;
+          if (planner_status == nav_core::status::FATAL) {
+            // Hit an unrecoverable error, move_base should abort
+            state_ = FAILED;
+            failure_mode_ = PLANNING_F;
+            diag_level_ = diagnostic_msgs::DiagnosticStatus::ERROR;
+            diag_msg_ = "Bad goal pose";
+            diagnostic_updater_.force_update();
+            ROS_ERROR_THROTTLE(5, "Bad goal pose");
+          } else {
+            // Attempt to recover
+            state_ = CLEARING;
+            recovery_trigger_ = PLANNING_R;
+          }
           publishZeroVelocity();
-          recovery_trigger_ = PLANNING_R;
         }
         lock.unlock();
       }
@@ -1158,18 +1191,29 @@ namespace move_base {
           //update the index of the next recovery behavior that we'll try
           recovery_index_++;
         }
-        else{
+        else {
           ROS_DEBUG_NAMED("move_base_recovery","All recovery behaviors have failed, locking the planner and disabling it.");
           //disable the planner thread
           boost::unique_lock<boost::mutex> lock(planner_mutex_);
           runPlanner_ = false;
           lock.unlock();
-
+          state_ = FAILED;
+          failure_mode_ = RECOVERY_F;
           ROS_DEBUG_NAMED("move_base_recovery","Something should abort after this.");
+        }
+        break;
+      case FAILED:
+      {
+        resetState();
+        //  Disable the planner thread
+        boost::unique_lock<boost::mutex> lock(planner_mutex_);
+        runPlanner_ = false;
+        lock.unlock();
 
-          // We need to abort goal and log a message; decide if we should spit out a new log
-          bool log_condition = (distanceXYTheta(planner_goal_, last_failed_goal_) >= 1e-3);
+        //  We need to abort goal and log a message; decide if we should spit out a new log
+        bool log_condition = (distanceXYTheta(planner_goal_, last_failed_goal_) >= 1e-3);
 
+        if (failure_mode_ == RECOVERY_F) {
           if(recovery_trigger_ == CONTROLLING_R){
             ROS_ERROR_COND(log_condition, "Aborting because a valid control could not be found. Even after executing all recovery behaviors");
             as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid control. Even after executing recovery behaviors.");
@@ -1182,14 +1226,15 @@ namespace move_base {
             ROS_ERROR_COND(log_condition, "Aborting because the robot appears to be oscillating over and over. Even after executing all recovery behaviors");
             as_->setAborted(move_base_msgs::MoveBaseResult(), "Robot is oscillating. Even after executing recovery behaviors.");
           }
-
-          // Record the failed goal so in the next cycle we don't log a new message
-          last_failed_goal_ = planner_goal_;
-
-          resetState();
-          return true;
+        } else if (failure_mode_ == PLANNING_F) {
+          ROS_ERROR_COND(log_condition, "Aborting because the end goal is occupied in the global static map");
+          as_->setAborted(move_base_msgs::MoveBaseResult(), "End goal is occupied in the global static map, no valid plans");
         }
-        break;
+
+        // Record the failed goal so in the next cycle we don't log a new message
+        last_failed_goal_ = planner_goal_;
+        return true;
+      }
       default:
         ROS_ERROR("This case should never be reached, something is wrong, aborting");
         resetState();
