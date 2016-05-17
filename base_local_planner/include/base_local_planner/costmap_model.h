@@ -48,7 +48,7 @@ namespace base_local_planner
 {
 
 /**
- * @brief List of checks that are understood by the CostmapModel. FootprintLoopDiamondX is the default
+ * @brief List of checks that are understood by the CostmapModel. FootprintLoop is the default
  *        if none are explicitly supplied to the CostmapModel constructor.
  */
 enum FootprintCheckMethod
@@ -72,7 +72,7 @@ public:
    * @param costmap The costmap that should be used
    * @return
    */
-  CostmapModel(const costmap_2d::Costmap2D& costmap, FootprintCheckMethod = FootprintLoopDiamondX);
+  CostmapModel(const costmap_2d::Costmap2D& costmap, FootprintCheckMethod = FootprintLoop);
 
   /**
    * @brief  Destructor for the world model
@@ -92,6 +92,37 @@ public:
   virtual double footprintCost(const geometry_msgs::Point& position,
                                const std::vector<geometry_msgs::Point>& footprint,
                                double inscribed_radius, double circumscribed_radius);
+
+  /**
+   * @brief  Checks if any obstacles in the costmap lie inside a convex footprint that is rasterized into the grid
+   *         using a specified method
+   * @param  position The position of the robot in world coordinates
+   * @param  footprint The specification of the footprint of the robot in world coordinates
+   * @param  inscribed_radius The radius of the inscribed circle of the robot
+   * @param  circumscribed_radius The radius of the circumscribed circle of the robot
+   * @param  method Method to use for the foorprint check
+   * @return Positive if all the points lie outside the footprint, negative otherwise
+   */
+  virtual double footprintCost(const geometry_msgs::Point& position,
+                               const std::vector<geometry_msgs::Point>& footprint,
+                               double inscribed_radius, double circumscribed_radius,
+                               FootprintCheckMethod method);
+
+  /**
+   * @brief  Checks if any obstacles in the costmap lie inside a convex footprint that is rasterized into the grid
+   *         using a specified method
+   * @param  x X coordinates of base pose
+   * @param  y Y coordinates of base pose
+   * @param  theta yaw of the base pose
+   * @param  footprint_spec The specification of the footprint of the robot in world coordinates
+   * @param  method Method to use for the foorprint check
+   * @param  inscribed_radius The radius of the inscribed circle of the robot (Default: 0)
+   * @param  circumscribed_radius The radius of the circumscribed circle of the robot (Default: 0)
+   * @return
+   */
+  double footprintCost(double x, double y, double theta,
+                       const std::vector<geometry_msgs::Point>& footprint_spec,
+                       FootprintCheckMethod method, double inscribed_radius = 0.0, double circumscribed_radius=0.0);
 
   /**
    * @brief  Checks if any obstacles in the costmap lie inside a convex footprint that is rasterized into the grid

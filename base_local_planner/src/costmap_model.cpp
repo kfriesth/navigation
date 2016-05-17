@@ -45,7 +45,7 @@ namespace base_local_planner
 {
 
 CostmapModel::CostmapModel(const costmap_2d::Costmap2D& ma, base_local_planner::FootprintCheckMethod method)
-  : costmap_(ma), check_method_(method)
+  : check_method_(method), costmap_(ma)
 {
 }
 
@@ -55,7 +55,16 @@ double CostmapModel::footprintCost(const geometry_msgs::Point& position,
                                    double inscribed_radius,
                                    double circumscribed_radius)
 {
-  switch (check_method_)
+  return footprintCost(position, footprint, inscribed_radius, circumscribed_radius, check_method_);
+}
+
+
+double CostmapModel::footprintCost(const geometry_msgs::Point& position,
+                                   const std::vector<geometry_msgs::Point>& footprint,
+                                   double inscribed_radius, double circumscribed_radius,
+                                   base_local_planner::FootprintCheckMethod method)
+{
+  switch (method)
   {
   case FootprintLoop:
   {
@@ -81,6 +90,37 @@ double CostmapModel::footprintCost(const geometry_msgs::Point& position,
   // If we don't understand the method then we will return an obstacle
   return -1.0;
 }
+
+// Copied from world_model.h with check method added and passed along
+double CostmapModel::footprintCost(double x, double y, double theta,
+                                   const std::vector<geometry_msgs::Point>& footprint_spec,
+                                   base_local_planner::FootprintCheckMethod method,
+                                   double inscribed_radius, double circumscribed_radius)
+{
+  double cos_th = cos(theta);
+  double sin_th = sin(theta);
+  std::vector<geometry_msgs::Point> oriented_footprint;
+
+  for (size_t i = 0; i < footprint_spec.size(); i++)
+  {
+    geometry_msgs::Point new_pt;
+    new_pt.x = x + (footprint_spec[i].x * cos_th - footprint_spec[i].y * sin_th);
+    new_pt.y = y + (footprint_spec[i].x * sin_th + footprint_spec[i].y * cos_th);
+    oriented_footprint.push_back(new_pt);
+  }
+
+  geometry_msgs::Point robot_position;
+  robot_position.x = x;
+  robot_position.y = y;
+
+  if (inscribed_radius == 0.0)
+  {
+    costmap_2d::calculateMinAndMaxDistances(footprint_spec, inscribed_radius, circumscribed_radius);
+  }
+
+  return footprintCost(robot_position, oriented_footprint, inscribed_radius, circumscribed_radius, method);
+}
+
 
 void CostmapModel::polygonOutlineCells(const std::vector<costmap_2d::MapLocation>& polygon,
                                        std::vector<costmap_2d::MapLocation>& polygon_cells) const
@@ -404,10 +444,10 @@ double CostmapModel::diamondCost(const geometry_msgs::Point& position,
 
   double cost = costmap_2d::FREE_SPACE;
   // join the midpoints of adjacent edges and check their lines
-  for (size_t i = 0; i < footprint.size(); i ++)
+  for (size_t i = 0; i < n; i ++)
   {
-    size_t j = (i+1) % footprint.size();
-    size_t k = (i+2) % footprint.size();
+    size_t j = (i+1) % n;
+    size_t k = (i+2) % n;
 
     double x0 = 0.5 * (footprint[i].x + footprint[j].x);
     double x1 = 0.5 * (footprint[j].x + footprint[k].x);
