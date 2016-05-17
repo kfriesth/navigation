@@ -194,6 +194,8 @@ public:
                             const std::vector<geometry_msgs::Point>& footprint,
                             double inscribed_radius, double circumscribed_radius);
 
+  FootprintCheckMethod check_method_;  ///< @brief Which method to use for checks
+
 protected:
   /**
    * @brief Raytrace the polygon perimeter and collect the cells in polygon_cells
@@ -287,8 +289,6 @@ protected:
   double realPointCost(double x, double y);
 
   const costmap_2d::Costmap2D& costmap_;  ///< @brief Allows access of costmap obstacle information
-
-  FootprintCheckMethod check_method_;  ///< @brief Which method to use for checks
 };
 
 }  // namespace base_local_planner
