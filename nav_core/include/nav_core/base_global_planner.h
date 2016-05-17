@@ -80,7 +80,7 @@ namespace nav_core {
           std::vector<geometry_msgs::PoseStamped>& plan,
           int& custom_status)
       {
-        // Generating a default 2 argument implementation for the plugins
+        // Generating a default 3 argument implementation for the plugins
         // that don't provide it. The custom status will mirror the
         // return value of the status free makePlan.
         const bool return_value = makePlan(start, goal, plan);

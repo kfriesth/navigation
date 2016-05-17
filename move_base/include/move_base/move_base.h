@@ -55,7 +55,6 @@
 #include <costmap_2d/costmap_2d_ros.h>
 #include <costmap_2d/costmap_2d.h>
 #include <nav_msgs/GetPlan.h>
-#include <diagnostic_updater/diagnostic_updater.h>
 
 #include <pluginlib/class_loader.h>
 #include <std_srvs/Empty.h>
@@ -178,19 +177,6 @@ namespace move_base {
       void resetState();
 
       void goalCB(const geometry_msgs::PoseStamped::ConstPtr& goal);
-
-      /**
-       * @brief Callback function for the diagnostic updater timer.
-       */
-      void updaterTimerCallback(const ros::TimerEvent&);
- 
-      /**
-       * @brief Callback function for the actual diagnostics status updater.
-       * @param[out] stat The status containing the diagnostic level and message.
-       */
-      void diagnosticCallback(diagnostic_updater::DiagnosticStatusWrapper &stat);
-
-
 
       void planThread();
 
@@ -322,11 +308,6 @@ namespace move_base {
       ros::Timer as_feedback_timer_;
 
       nav_core::NavGoalMananger::Ptr goal_manager_;
-
-      diagnostic_updater::Updater diagnostic_updater_;
-      ros::Timer diagnostic_timer_;
-      std::string diag_msg_;
-      char diag_level_;
 
       /**
        * @brief Smart pointer to container object to share costmaps and planners

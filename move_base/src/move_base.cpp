@@ -56,7 +56,6 @@ namespace move_base {
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
     runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false),
     new_global_plan_(false), recovery_cleanup_requested_(false),
-    diag_level_(diagnostic_msgs::DiagnosticStatus::OK), diag_msg_("Initialized."),
     nav_core_state_(new nav_core::State)
   {
     goal_manager_.reset(new nav_core::NavGoalMananger);
@@ -216,13 +215,7 @@ namespace move_base {
     // Create and start the timer for publishing action server feedback
     as_feedback_timer_ = nh.createTimer(ros::Duration(0.05), &MoveBase::asFeedbackTimerCallback, this);
 
-    // Set up the diagnostic updater
-    diagnostic_updater_.setHardwareID("none");
-    diagnostic_updater_.add("End goal validator", this,
-        &MoveBase::diagnosticCallback);
-    diagnostic_timer_ = nh.createTimer(ros::Duration(1.0),
-        &MoveBase::updaterTimerCallback, this);
-
+    
     nav_core_state_->global_costmap_ = planner_costmap_ros_;
     nav_core_state_->local_costmap_ = controller_costmap_ros_;
     nav_core_state_->global_planner_ = planner_;
@@ -364,18 +357,7 @@ namespace move_base {
     goal_manager_->setCurrentGoal(nav_core::NavGoal(*goal));
 
     action_goal_pub_.publish(action_goal);
-  }
-
-  void MoveBase::updaterTimerCallback(const ros::TimerEvent&)
-  {
-    diagnostic_updater_.update();
-  }
-
-  void MoveBase::diagnosticCallback(diagnostic_updater::DiagnosticStatusWrapper &stat)
-  {
-    stat.summary(diag_level_, diag_msg_);
-  }
-
+  } 
 
   void MoveBase::clearCostmapWindows(double size_x, double size_y){
     tf::Stamped<tf::Pose> global_pose;
@@ -723,8 +705,6 @@ namespace move_base {
 
       if(gotPlan){
         ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
-        diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
-        diag_msg_ = "End goal valid";
         //pointer swap the plans under mutex (the controller will pull from latest_plan_)
         std::vector<geometry_msgs::PoseStamped>* temp_plan = planner_plan_;
 
@@ -787,15 +767,14 @@ namespace move_base {
            * disabled). We will reset this flag to true after recovery is done.
            */
           runPlanner_ = false;
-          if (planner_status == nav_core::status::FATAL) {
+          if (planner_status == nav_core::status::FATAL)
+          {
             // Hit an unrecoverable error, move_base should abort
             state_ = FAILED;
             failure_mode_ = PLANNING_F;
-            diag_level_ = diagnostic_msgs::DiagnosticStatus::ERROR;
-            diag_msg_ = "Bad goal pose";
-            diagnostic_updater_.force_update();
-            ROS_ERROR_THROTTLE(5, "Bad goal pose");
-          } else {
+          }
+          else 
+          {
             // Attempt to recover
             state_ = CLEARING;
             recovery_trigger_ = PLANNING_R;
