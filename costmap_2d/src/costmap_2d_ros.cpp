@@ -148,6 +148,10 @@ Costmap2DROS::Costmap2DROS(std::string name, tf::TransformListener& tf) :
     topic_param = "published_footprint";
   }
 
+  // Subscribe to the footprint padding topic
+  footprint_padding_sub_ = private_nh.subscribe("set_footprint_padding", 1,
+                                                &Costmap2DROS::setRobotFootprintPadding, this);
+
   private_nh.param(topic_param, topic, std::string("oriented_footprint"));
   footprint_pub_ = private_nh.advertise<geometry_msgs::PolygonStamped>("footprint", 1);
 
@@ -354,6 +358,17 @@ void Costmap2DROS::setStaticRobotFootprint(const std::vector<geometry_msgs::Poin
   static_footprint_ = points;
 
   layered_costmap_->setStaticInscribedRadius(static_footprint_);
+}
+
+void Costmap2DROS::setRobotFootprintPadding(const std_msgs::Float32& padding)
+{
+  footprint_padding_ = padding.data;
+
+  // Repad the footprint with the new padding
+  padded_footprint_ = unpadded_footprint_;
+  padFootprint(padded_footprint_, footprint_padding_);
+
+  layered_costmap_->setFootprint(padded_footprint_);
 }
 
 void Costmap2DROS::movementCB(const ros::TimerEvent &event)

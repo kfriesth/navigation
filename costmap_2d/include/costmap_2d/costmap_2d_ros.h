@@ -47,6 +47,7 @@
 #include <geometry_msgs/PolygonStamped.h>
 #include <dynamic_reconfigure/server.h>
 #include <pluginlib/class_loader.h>
+#include <std_msgs/Float32.h>
 
 class SuperValue : public XmlRpc::XmlRpcValue
 {
@@ -218,6 +219,9 @@ public:
    * getUnpaddedRobotFootprint(). */
   void setUnpaddedRobotFootprintPolygon(const geometry_msgs::Polygon& footprint);
 
+  /** @brief Sets the footprint_padding value that is applied to the robot footprints. */
+  void setRobotFootprintPadding(const std_msgs::Float32& padding);
+
 protected:
   LayeredCostmap* layered_costmap_;
   std::string name_;
@@ -252,6 +256,7 @@ private:
   boost::recursive_mutex configuration_mutex_;
 
   ros::Subscriber footprint_sub_;
+  ros::Subscriber footprint_padding_sub_;
   ros::Publisher footprint_pub_;
   bool got_footprint_;
   std::vector<geometry_msgs::Point> unpadded_footprint_;
