@@ -304,6 +304,11 @@ namespace move_base {
        * @brief Smart pointer to container object to share costmaps and planners
        */
       nav_core::State::Ptr nav_core_state_;
+
+      /**
+       * @brief Smart pointer to object defining goal tolerances
+       */
+      nav_core::GoalTolerances::Ptr goal_tolerances_;
   };
 };
 #endif

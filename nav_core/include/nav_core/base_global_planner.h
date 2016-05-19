@@ -43,13 +43,15 @@
 #include <boost/function.hpp>
 #include "nav_core/nav_goal_manager.h"
 #include "nav_core/nav_core_state.h"
+#include "nav_core/base_planner.h"
 
 namespace nav_core {
   /**
    * @class BaseGlobalPlanner
    * @brief Provides an interface for global planners used in navigation. All global planners written as plugins for the navigation stack must adhere to this interface.
    */
-  class BaseGlobalPlanner{
+  class BaseGlobalPlanner : public BasePlanner
+  {
     public:
       typedef boost::shared_ptr<BaseGlobalPlanner> Ptr;
       typedef boost::function <Ptr ()> FetchFunction;

@@ -34,52 +34,42 @@
 *
 * Author: Jason Mercer
 *********************************************************************/
+#ifndef NAV_CORE_BASE_PLANNER
+#define NAV_CORE_BASE_PLANNER
 
-#ifndef NAV_CORE_NAV_CORE_STATE_H_
-#define NAV_CORE_NAV_CORE_STATE_H_
-
-#include <costmap_2d/costmap_2d_ros.h>
-#include <boost/shared_ptr.hpp>
+#include "nav_core/goal_tolerances.h"
 
 namespace nav_core
 {
-class BaseLocalPlanner;
-class BaseGlobalPlanner;
-
 /**
- * @class State
- * @brief Holds the objects related to planning and tracking for easier sharing
- *        with components
+ * @class BasePlanner
+ * @brief Provides an interface for planners used in navigation.
  */
-class State
+class BasePlanner
 {
 public:
-  typedef boost::shared_ptr<State> Ptr;
-
-  State()
-    : global_costmap_(NULL), local_costmap_(NULL)
+  /**
+   * @brief Set the object that will be used to make decisions about goal tolerances
+   * @param goal_tolerances The smart pointer to the object
+   */
+  virtual void setGoalTolerances(nav_core::GoalTolerances::Ptr goal_tolerances)
   {
+    goal_tolerances_ = goal_tolerances;
   }
 
   /**
-   * @brief Pointer to the current global costmap
+   * @brief Get the object that is used to make decisions about goal tolerances
+   * @return The smart pointer to the object
    */
-  costmap_2d::Costmap2DROS* global_costmap_;
+  virtual nav_core::GoalTolerances::Ptr goalTolerances() const
+  {
+    return goal_tolerances_;
+  }
 
-  /**
-   * @brief Pointer to the current local costmap
-   */
-  costmap_2d::Costmap2DROS* local_costmap_;
-
-  /**
-   * @brief Shared Pointer to the current global planner
-   */
-  boost::shared_ptr<BaseGlobalPlanner> global_planner_;
-
-  /**
-   * @brief Shared Pointer to the current local planner
-   */
-  boost::shared_ptr<BaseLocalPlanner> local_planner_;
+protected:
+  nav_core::GoalTolerances::Ptr goal_tolerances_;
 };
-}
-#endif  // NAV_CORE_STATE_H_
+
+}  // namespace nav_core
+
+#endif  // NAV_CORE_BASE_PLANNER
