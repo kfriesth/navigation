@@ -85,7 +85,7 @@ namespace move_base {
     private_nh.param("oscillation_distance", oscillation_distance_, 0.5);
 
     // Load goal tolerances (these will eventually be dynamic and come from the action server)
-    // The goal tolerances contructor loads from goal_threshold and orientation_corr_threshold
+    // The goal tolerances contructor loads from goal_tolerance_xy and goal_tolerance_yaw
     goal_tolerances_ = nav_core::GoalTolerances::Ptr(new nav_core::GoalTolerances(private_nh));
 
     //set up plan triple buffer
