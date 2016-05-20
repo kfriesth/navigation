@@ -40,7 +40,7 @@
 
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
-#include "nav_core/nav_goal.h"
+#include <nav_core/nav_goal.h>
 
 namespace nav_core
 {

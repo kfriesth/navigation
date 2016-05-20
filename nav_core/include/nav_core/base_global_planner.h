@@ -41,9 +41,9 @@
 #include <costmap_2d/costmap_2d_ros.h>
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
-#include "nav_core/nav_goal_manager.h"
-#include "nav_core/nav_core_state.h"
-#include "nav_core/base_planner.h"
+#include <nav_core/nav_goal_manager.h>
+#include <nav_core/nav_core_state.h>
+#include <nav_core/base_planner.h>
 
 namespace nav_core {
   /**

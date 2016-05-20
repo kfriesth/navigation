@@ -37,7 +37,7 @@
 #ifndef NAV_CORE_BASE_PLANNER
 #define NAV_CORE_BASE_PLANNER
 
-#include "nav_core/goal_tolerances.h"
+#include <nav_core/goal_tolerances.h>
 
 namespace nav_core
 {
@@ -48,6 +48,13 @@ namespace nav_core
 class BasePlanner
 {
 public:
+  /**
+   * @brief Virtual destructor as this will have derived classes
+   */
+  virtual ~BasePlanner()
+  {
+  }
+
   /**
    * @brief Set the object that will be used to make decisions about goal tolerances
    * @param goal_tolerances The smart pointer to the object
