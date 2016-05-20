@@ -56,6 +56,8 @@ void ObstacleLayer::onInitialize()
   ros::NodeHandle nh("~/" + name_), g_nh;
   rolling_window_ = layered_costmap_->isRolling();
 
+  footprint_clearing_padding_ = 0.0;
+
   bool track_unknown_space;
   nh.param("track_unknown_space", track_unknown_space, layered_costmap_->isTrackingUnknown());
   if (track_unknown_space)
@@ -416,7 +418,10 @@ void ObstacleLayer::updateFootprint(double robot_x, double robot_y, double robot
                                     double* max_x, double* max_y)
 {
     if (!footprint_clearing_enabled_) return;
-    transformFootprint(robot_x, robot_y, robot_yaw, getFootprint(), transformed_footprint_);
+
+    std::vector<geometry_msgs::Point> padded_footprint = getFootprint();
+    padFootprint(padded_footprint, footprint_clearing_padding_);
+    transformFootprint(robot_x, robot_y, robot_yaw, padded_footprint, transformed_footprint_);
 
     for (unsigned int i = 0; i < transformed_footprint_.size(); i++)
     {
@@ -615,6 +620,11 @@ void ObstacleLayer::reset()
     resetMaps();
     current_ = true;
     activate();
+}
+
+void ObstacleLayer::setFootprintClearingPadding(float padding)
+{
+  footprint_clearing_padding_ = padding;
 }
 
 }  // namespace costmap_2d

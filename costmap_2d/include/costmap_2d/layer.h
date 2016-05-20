@@ -112,6 +112,12 @@ public:
    * notified of changes to the robot's footprint. */
   virtual void onFootprintChanged() {}
 
+  /**
+   * @brief Updates the footprint clearing padding value on applicable layers.
+   * @param padding The value to pad footprints by during footprint clearing.
+   */
+  virtual void setFootprintClearingPadding(float padding) {}
+
 protected:
   /** @brief This is called at the end of initialize().  Override to
    * implement subclass-specific initialization.

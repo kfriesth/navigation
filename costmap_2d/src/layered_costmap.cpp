@@ -185,6 +185,15 @@ void LayeredCostmap::setFootprint(const std::vector<geometry_msgs::Point>& footp
   }
 }
 
+void LayeredCostmap::updateFootprintClearingPadding(float padding)
+{
+  for (vector<boost::shared_ptr<Layer> >::iterator plugin = plugins_.begin(); plugin != plugins_.end();
+      ++plugin)
+  {
+    (*plugin)->setFootprintClearingPadding(padding);
+  }
+}
+
 void LayeredCostmap::setStaticInscribedRadius(const std::vector<geometry_msgs::Point>& footprint_spec)
 {
   double circumscribed_radius;  // This is not actually used.

@@ -113,6 +113,12 @@ public:
   void addStaticObservation(costmap_2d::Observation& obs, bool marking, bool clearing);
   void clearStaticObservations(bool marking, bool clearing);
 
+  /**
+   * @brief Sets the padding applied to the footpring during footpring clearing.
+   * @param padding The padding to be applied to the footprint.
+   */
+  void setFootprintClearingPadding(float padding);
+
 protected:
   virtual void setupDynamicReconfigure(ros::NodeHandle& nh);
 
@@ -146,7 +152,8 @@ protected:
 
   std::vector<geometry_msgs::Point> transformed_footprint_;
   bool footprint_clearing_enabled_;
-  void updateFootprint(double robot_x, double robot_y, double robot_yaw, double* min_x, double* min_y, 
+  float footprint_clearing_padding_;
+  void updateFootprint(double robot_x, double robot_y, double robot_yaw, double* min_x, double* min_y,
                        double* max_x, double* max_y);
 
   std::string global_frame_;  ///< @brief The global frame for the costmap
