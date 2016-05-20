@@ -34,29 +34,49 @@
 *
 * Author: Jason Mercer
 *********************************************************************/
-#ifndef NAV_CORE_BASE_PLANNER
-#define NAV_CORE_BASE_PLANNER
+#ifndef NAV_CORE_GOAL_TOLERANCES_AWARE
+#define NAV_CORE_GOAL_TOLERANCES_AWARE
 
 #include <nav_core/goal_tolerances.h>
-#include <nav_core/goal_tolerances_aware.h>
 
 namespace nav_core
 {
 /**
- * @class BasePlanner
- * @brief Provides an interface for planners used in navigation.
+ * @class GoalTolerancesAware
+ * @brief An interface that provides a goal tolerances object, a setter and a getter
  */
-class BasePlanner : public GoalTolerancesAware
+class GoalTolerancesAware
 {
 public:
   /**
    * @brief Virtual destructor as this will have derived classes
    */
-  virtual ~BasePlanner()
+  virtual ~GoalTolerancesAware()
   {
   }
+
+  /**
+   * @brief Set the object that will be used to make decisions about goal tolerances
+   * @param goal_tolerances The smart pointer to the object
+   */
+  virtual void setGoalTolerances(nav_core::GoalTolerances::Ptr goal_tolerances)
+  {
+    goal_tolerances_ = goal_tolerances;
+  }
+
+  /**
+   * @brief Get the object that is used to make decisions about goal tolerances
+   * @return The smart pointer to the object
+   */
+  virtual nav_core::GoalTolerances::Ptr goalTolerances() const
+  {
+    return goal_tolerances_;
+  }
+
+protected:
+  nav_core::GoalTolerances::Ptr goal_tolerances_;
 };
 
 }  // namespace nav_core
 
-#endif  // NAV_CORE_BASE_PLANNER
+#endif  // NAV_CORE_GOAL_TOLERANCES_AWARE
