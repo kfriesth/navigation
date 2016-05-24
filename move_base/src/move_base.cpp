@@ -530,8 +530,6 @@ namespace move_base {
   }
 
   MoveBase::~MoveBase(){
-    recovery_behaviors_.clear();
-
     delete dsrv_;
 
     as_feedback_timer_.stop();
@@ -555,6 +553,8 @@ namespace move_base {
 
     planner_.reset();
     tc_.reset();
+
+    recovery_behaviors_.clear();
   }
 
   bool MoveBase::makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan){
