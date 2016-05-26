@@ -1153,7 +1153,7 @@ namespace move_base {
         ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
         if (planner_)
         {
-          // This invoke's the planner's prepareForPostRecovery method to prepare it for post-recovery actions.
+          // This invokes the planner's prepareForPostRecovery method to prepare it for post-recovery actions.
           planner_->prepareForPostRecovery();
         }
         //we'll invoke whatever recovery behavior we're currently on if they're enabled
