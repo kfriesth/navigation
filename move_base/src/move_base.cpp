@@ -136,6 +136,10 @@ namespace move_base {
       }
 
       planner_ = getGlobalPlannerPlugin(global_planner);
+
+      // Call the planner's reset method so that if it chooses to it can take actions based on it
+      planner_->resetPlanner();
+
     } catch (const pluginlib::PluginlibException& ex)
     {
       ROS_FATAL("Failed to create the %s planner, are you sure it is properly registered and that the containing library is built? Exception: %s", global_planner.c_str(), ex.what());
@@ -296,6 +300,9 @@ namespace move_base {
         publishZeroVelocity();
 
         planner_ = getGlobalPlannerPlugin(config.base_global_planner);
+
+        // Call the planner's reset method so that if it chooses to it can take actions based on it
+        planner_->resetPlanner();
 
         lock.unlock();
       } catch (const pluginlib::PluginlibException& ex)
@@ -1096,16 +1103,17 @@ namespace move_base {
         {
           ROS_DEBUG_NAMED( "move_base", "Got a valid command from the local planner: %.3lf, %.3lf, %.3lf",
                            cmd_vel.linear.x, cmd_vel.linear.y, cmd_vel.angular.z );
-          last_valid_control_ = ros::Time::now();
+
           //make sure that we send the velocity command to the base
           vel_pub_.publish(cmd_vel);
 
-          // It is possible for computeVelocityCommands to return true when we are waiting for dynamics
+          // It is possible for computeVelocityCommands to return true when we are waiting for dynamic costmap logic
           // to timeout. In that case, custom_status == nav_core::status::WAIT. If we are in an OK state
           // where meaningful cmd_vel is being published then we can reset the indices here in move_base
           // as well as in the recovery_manager.
           if (custom_status == nav_core::status::OK)
           {
+            last_valid_control_ = ros::Time::now();
             resetRecoveryIndices();
           }
 
@@ -1145,8 +1153,8 @@ namespace move_base {
         ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
         if (planner_)
         {
-          // This will invoke the resetPlanner method when recovery is called.
-          planner_->resetPlanner();
+          // This invoke's the planner's prepareForPostRecovery method to prepare it for post-recovery actions.
+          planner_->prepareForPostRecovery();
         }
         //we'll invoke whatever recovery behavior we're currently on if they're enabled
         if(recovery_behavior_enabled_ && recovery_index_ < recovery_behaviors_.size()){
