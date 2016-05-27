@@ -84,6 +84,10 @@ namespace move_base {
     private_nh.param("oscillation_timeout", oscillation_timeout_, 0.0);
     private_nh.param("oscillation_distance", oscillation_distance_, 0.5);
 
+    // Load goal tolerances (these will eventually be dynamic and come from the action server)
+    // The goal tolerances contructor loads from goal_tolerance_xy and goal_tolerance_yaw
+    goal_tolerances_ = nav_core::GoalTolerances::Ptr(new nav_core::GoalTolerances(private_nh));
+
     //set up plan triple buffer
     planner_plan_ = new std::vector<geometry_msgs::PoseStamped>();
     latest_plan_ = new std::vector<geometry_msgs::PoseStamped>();
@@ -169,6 +173,7 @@ namespace move_base {
       tc_ = blp_loader_.createInstance(local_planner);
       ROS_INFO("Created local_planner %s", local_planner.c_str());
       tc_->setGoalManager(goal_manager_);
+      propagateGoalTolerancesTo(tc_);
       tc_->initialize(blp_loader_.getName(local_planner), &tf_, controller_costmap_ros_);
 
     } catch (const pluginlib::PluginlibException& ex)
@@ -338,6 +343,7 @@ namespace move_base {
         controller_plan_->clear();
         resetState();
         tc_->setGoalManager(goal_manager_);
+        propagateGoalTolerancesTo(tc_);
         tc_->initialize(blp_loader_.getName(config.base_local_planner), &tf_, controller_costmap_ros_);
       } catch (const pluginlib::PluginlibException& ex)
       {
@@ -1388,6 +1394,7 @@ namespace move_base {
       ros::Time t = ros::Time::now();
       global_planner_cache_.insert(std::make_pair(plugin_name, bgp_loader_.createInstance(plugin_name) ) );
       global_planner_cache_[plugin_name]->setGoalManager(goal_manager_);
+      propagateGoalTolerancesTo(global_planner_cache_[plugin_name]);
       global_planner_cache_[plugin_name]->setNavCoreState(nav_core_state_);
       global_planner_cache_[plugin_name]->initialize(bgp_loader_.getName(plugin_name), planner_costmap_ros_);
       ROS_DEBUG("Created new global planner plugin %s in %f seconds.", plugin_name.c_str(), (ros::Time::now() - t).toSec() );

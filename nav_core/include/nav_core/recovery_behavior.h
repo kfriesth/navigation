@@ -40,7 +40,7 @@
 #include <tf/transform_listener.h>
 #include <nav_core/base_global_planner.h>
 #include <nav_core/base_local_planner.h>
-#include "nav_core/nav_goal_manager.h"
+#include <nav_core/nav_goal_manager.h>
 
 namespace nav_core {
   /**
