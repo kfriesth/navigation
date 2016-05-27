@@ -50,6 +50,7 @@
 #include <nav_core/recovery_behavior.h>
 #include <nav_core/nav_goal_manager.h>
 #include <nav_core/nav_core_state.h>
+#include <nav_core/goal_tolerances_aware.h>
 
 #include <geometry_msgs/PoseStamped.h>
 #include <costmap_2d/costmap_2d_ros.h>
@@ -83,7 +84,8 @@ namespace move_base {
    * @class MoveBase
    * @brief A class that uses the actionlib::ActionServer interface that moves the robot base to a goal location.
    */
-  class MoveBase {
+  class MoveBase : public nav_core::GoalTolerancesAware
+  {
     public:
       /**
        * @brief  Constructor for the actions
@@ -304,11 +306,6 @@ namespace move_base {
        * @brief Smart pointer to container object to share costmaps and planners
        */
       nav_core::State::Ptr nav_core_state_;
-
-      /**
-       * @brief Smart pointer to object defining goal tolerances
-       */
-      nav_core::GoalTolerances::Ptr goal_tolerances_;
   };
 };
 #endif
