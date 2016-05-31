@@ -227,6 +227,23 @@ namespace move_base {
     nav_core_state_->local_costmap_ = controller_costmap_ros_;
     nav_core_state_->global_planner_ = planner_;
     nav_core_state_->local_planner_ = tc_;
+
+    // Initalise diagnostics
+    diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
+    diag_msg_ = "Initialized.";
+    diagnostic_updater_.setHardwareID("none");
+    diagnostic_updater_.add("Move_base state", this, &MoveBase::diagnosticCallback);
+    diagnostic_timer_ = nh.createTimer(ros::Duration(1.0), &MoveBase::updaterTimerCallback, this);
+  }
+
+  void MoveBase::updaterTimerCallback(const ros::TimerEvent&)
+  {
+    diagnostic_updater_.update();
+  }
+
+  void MoveBase::diagnosticCallback(diagnostic_updater::DiagnosticStatusWrapper &stat)
+  {
+    stat.summary(diag_level_, diag_msg_);
   }
 
   void MoveBase::reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level){
@@ -1053,6 +1070,8 @@ namespace move_base {
       //if we are in a planning state, then we'll attempt to make a plan
       case PLANNING:
         {
+          diag_msg_ = "Move_base is in planning state";
+          diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
           boost::mutex::scoped_lock lock(planner_mutex_);
           runPlanner_ = true;
           planner_cond_.notify_one();
@@ -1063,6 +1082,8 @@ namespace move_base {
       //if we're controlling, we'll attempt to find valid velocity commands
       case CONTROLLING:
       {
+        diag_msg_ = "Move_base is in controlling state";
+        diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
         ROS_DEBUG_NAMED("move_base","In controlling state.");
 
         //check to see if we've reached our goal
@@ -1156,6 +1177,8 @@ namespace move_base {
 
       //we'll try to clear out space with any user-provided recovery behaviors
       case CLEARING:
+        diag_msg_ = "Move_base is in clearing/recovery state";
+        diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
         ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
         if (planner_)
         {
@@ -1215,6 +1238,9 @@ namespace move_base {
         }
         break;
       default:
+        diag_msg_ = "Move_base is in unknown state";
+        diag_level_ = diagnostic_msgs::DiagnosticStatus::ERROR;
+        diagnostic_updater_.force_update();
         ROS_ERROR("This case should never be reached, something is wrong, aborting");
         resetState();
         //disable the planner thread

@@ -61,6 +61,7 @@
 #include <std_srvs/Empty.h>
 
 #include <dynamic_reconfigure/server.h>
+#include <diagnostic_updater/diagnostic_updater.h>
 #include "move_base/MoveBaseConfig.h"
 
 namespace move_base {
@@ -237,6 +238,17 @@ namespace move_base {
        */
       void asPreemptCallback();
 
+      /**
+      * @brief Callback function for the diagnostic updater timer.
+      */
+      void updaterTimerCallback(const ros::TimerEvent&);
+
+      /**
+      * @brief Callback function for the actual diagnostics status updater.
+      * @param[out] stat The status containing the diagnostic level and message.
+      */
+      void diagnosticCallback(diagnostic_updater::DiagnosticStatusWrapper &stat);
+
 
       tf::TransformListener& tf_;
 
@@ -306,6 +318,12 @@ namespace move_base {
        * @brief Smart pointer to container object to share costmaps and planners
        */
       nav_core::State::Ptr nav_core_state_;
+
+      // Set up diagnostics
+      diagnostic_updater::Updater diagnostic_updater_;
+      ros::Timer diagnostic_timer_;
+      std::string diag_msg_;
+      char diag_level_;
   };
 };
 #endif
