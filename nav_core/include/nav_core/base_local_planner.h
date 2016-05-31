@@ -45,13 +45,15 @@
 #include <boost/function.hpp>
 #include "nav_core/nav_goal_manager.h"
 #include "nav_core/nav_status.h"
+#include <nav_core/base_planner.h>
 
 namespace nav_core {
   /**
    * @class BaseLocalPlanner
    * @brief Provides an interface for local planners used in navigation. All local planners written as plugins for the navigation stack must adhere to this interface.
    */
-  class BaseLocalPlanner{
+  class BaseLocalPlanner : public BasePlanner
+  {
     public:
       typedef boost::shared_ptr<BaseLocalPlanner> Ptr;
       typedef boost::function <Ptr ()> FetchFunction;

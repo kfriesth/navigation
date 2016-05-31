@@ -151,6 +151,12 @@ public:
    * layers. */
   void setFootprint(const std::vector<geometry_msgs::Point>& footprint_spec);
 
+  /**
+   * @brief Updates the footprint clearing padding value on applicable layers.
+   * @param padding The value to pad footprints by during footprint clearing.
+   */
+  void updateFootprintClearingPadding(float padding);
+
   /** @brief Set the inscribed radii to be used for static inflation.
    * TODO(pchen): This can be removed when zone inflations are in.
    */

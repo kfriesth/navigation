@@ -34,52 +34,29 @@
 *
 * Author: Jason Mercer
 *********************************************************************/
+#ifndef NAV_CORE_BASE_PLANNER
+#define NAV_CORE_BASE_PLANNER
 
-#ifndef NAV_CORE_NAV_CORE_STATE_H_
-#define NAV_CORE_NAV_CORE_STATE_H_
-
-#include <costmap_2d/costmap_2d_ros.h>
-#include <boost/shared_ptr.hpp>
+#include <nav_core/goal_tolerances.h>
+#include <nav_core/goal_tolerances_aware.h>
 
 namespace nav_core
 {
-class BaseLocalPlanner;
-class BaseGlobalPlanner;
-
 /**
- * @class State
- * @brief Holds the objects related to planning and tracking for easier sharing
- *        with components
+ * @class BasePlanner
+ * @brief Provides an interface for planners used in navigation.
  */
-class State
+class BasePlanner : public GoalTolerancesAware
 {
 public:
-  typedef boost::shared_ptr<State> Ptr;
-
-  State()
-    : global_costmap_(NULL), local_costmap_(NULL)
+  /**
+   * @brief Virtual destructor as this will have derived classes
+   */
+  virtual ~BasePlanner()
   {
   }
-
-  /**
-   * @brief Pointer to the current global costmap
-   */
-  costmap_2d::Costmap2DROS* global_costmap_;
-
-  /**
-   * @brief Pointer to the current local costmap
-   */
-  costmap_2d::Costmap2DROS* local_costmap_;
-
-  /**
-   * @brief Shared Pointer to the current global planner
-   */
-  boost::shared_ptr<BaseGlobalPlanner> global_planner_;
-
-  /**
-   * @brief Shared Pointer to the current local planner
-   */
-  boost::shared_ptr<BaseLocalPlanner> local_planner_;
 };
-}
-#endif  // NAV_CORE_STATE_H_
+
+}  // namespace nav_core
+
+#endif  // NAV_CORE_BASE_PLANNER

@@ -43,14 +43,16 @@
 #include <boost/function.hpp>
 #include "nav_core/nav_goal_manager.h"
 #include "nav_core/nav_status.h"
-#include "nav_core/nav_core_state.h"
+#include <nav_core/nav_core_state.h>
+#include <nav_core/base_planner.h>
 
 namespace nav_core {
   /**
    * @class BaseGlobalPlanner
    * @brief Provides an interface for global planners used in navigation. All global planners written as plugins for the navigation stack must adhere to this interface.
    */
-  class BaseGlobalPlanner{
+  class BaseGlobalPlanner : public BasePlanner
+  {
     public:
       typedef boost::shared_ptr<BaseGlobalPlanner> Ptr;
       typedef boost::function <Ptr ()> FetchFunction;
@@ -104,7 +106,12 @@ namespace nav_core {
       virtual void initialize(std::string name, costmap_2d::Costmap2DROS* costmap_ros) = 0;
 
       /**
-       * @brief Function to reset the planner state, whatever that mean for each plugin.
+       * @brief Function to prepare the planner for actions post-recovery, whatever that means for each plugin.
+       */
+      virtual void prepareForPostRecovery(){}
+
+      /**
+       * @brief Function to reset the state of the planner (for e.g. reintialize), whatever that means for each plugin.
        */
       virtual void resetPlanner(){}
 
