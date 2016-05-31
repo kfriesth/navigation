@@ -782,7 +782,7 @@ namespace move_base {
           runPlanner_ = false;
           if (planner_status == nav_core::status::FATAL)
           {
-            // Hit an unrecoverable error, move_base should abort
+            // Hit an unrecoverable error, move_base should abort planning
             state_ = FAILED;
             failure_mode_ = PLANNING_F;
           }
