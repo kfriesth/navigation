@@ -119,6 +119,8 @@ namespace move_base {
     private_nh.param("clearing_rotation_allowed", clearing_rotation_allowed_, true);
     private_nh.param("recovery_behavior_enabled", recovery_behavior_enabled_, true);
 
+    private_nh.param<double>("minimum_goal_spacing_seconds", minimum_goal_spacing_seconds_, 0.5);
+
     //create the ros wrapper for the planner's costmap... and initializer a pointer we'll use with the underlying map
     planner_costmap_ros_ = new costmap_2d::Costmap2DROS("global_costmap", tf_);
     planner_costmap_ros_->pause();
@@ -800,6 +802,22 @@ namespace move_base {
 
   void MoveBase::executeCb(const move_base_msgs::MoveBaseGoalConstPtr& move_base_goal)
   {
+    ros::Time ros_time_now = ros::Time::now();
+
+    // CORE-3994
+    // Protect against goals being sent too quickly by aborting them
+    // This is a stop-gap until we can use a full action server
+    const double consecutive_goal_time = (ros_time_now - last_execute_callback_).toSec();
+    if (consecutive_goal_time < minimum_goal_spacing_seconds_)
+    {
+      ROS_ERROR_THROTTLE(1, "move_base: Aborting on goal because it was sent too soon after the last goal %gs < %gs",
+                             consecutive_goal_time, minimum_goal_spacing_seconds_);
+      as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent too soon after the last goal");
+      goal_manager_->setActiveGoal(false);  // setting no active goal
+      return;
+    }
+    last_execute_callback_ = ros_time_now;
+
     // The Action Server can call the callback on a null ptr. Before doing this it will
     // issue a ROS_ERROR with the text:
     //    Attempting to accept the next goal when a new goal is not available

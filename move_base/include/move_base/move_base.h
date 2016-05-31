@@ -306,6 +306,19 @@ namespace move_base {
        * @brief Smart pointer to container object to share costmaps and planners
        */
       nav_core::State::Ptr nav_core_state_;
+
+      /**
+       * @brief The last time the action server triggered the execute callback.
+       *        Initial value is the start of the epoch
+       */
+      ros::Time last_execute_callback_;
+
+      /**
+       * @brief The number of seconds that are required to elapse between calls to
+       *        the execute callback via the actions server. Calls faster than this
+       *        will cause the goal to be aborted. Default 0.5 (seconds)
+       */
+      double minimum_goal_spacing_seconds_;
   };
 };
 #endif
