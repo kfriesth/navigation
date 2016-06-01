@@ -1381,6 +1381,8 @@ namespace move_base {
   }
 
   void MoveBase::resetState(){
+    publishZeroVelocity();  // stop immediately
+
     goal_manager_->setActiveGoal(false);  // setting no active goal
 
     // Disable the planner thread
@@ -1393,7 +1395,6 @@ namespace move_base {
     resetRecoveryIndices();
     state_ = PLANNING;
     recovery_trigger_ = PLANNING_R;
-    publishZeroVelocity();
 
     //if we shutdown our costmaps when we're deactivated... we'll do that now
     if(shutdown_costmaps_){
