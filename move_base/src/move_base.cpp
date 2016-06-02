@@ -1443,6 +1443,11 @@ namespace move_base {
       active_recovery_index_ >= 0 &&
       active_recovery_index_ < static_cast<int>(recovery_behaviors_.size()))
     {
+      // First ensure that we're setting velocities to zero so that we're in a safe state
+      // in case reverting a behaviour is time consuming
+      publishZeroVelocity();
+
+      // Now revert the changed caused by the active behaviour
       recovery_behaviors_[active_recovery_index_]->revertChanges();
     }
   }
