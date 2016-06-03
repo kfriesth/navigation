@@ -87,7 +87,7 @@ namespace move_base {
     private_nh.param("oscillation_timeout", oscillation_timeout_, 0.0);
     private_nh.param("oscillation_distance", oscillation_distance_, 0.5);
 
-    private_nh.param("recovery_cycle_counter_cap", recovery_cycle_counter_cap_, 10);
+    private_nh.param("recovery_cycle_counter_cap", recovery_cycle_counter_cap_, 7);
     private_nh.param("recovery_cycle_move_cap", recovery_cycle_move_cap_, 2.0);
 
     // Load goal tolerances (these will eventually be dynamic and come from the action server)
@@ -232,6 +232,9 @@ namespace move_base {
     nav_core_state_->global_planner_ = planner_;
     nav_core_state_->local_planner_ = tc_;
 
+    // Initialize the last faild goal so that we can see goal abort message
+    last_failed_goal_.pose.position.x = FLT_MAX;
+
     // Initialize the recovery counters and indices
     resetRecoveryIndices();
     resetRecoveryCounters();
@@ -348,6 +351,7 @@ namespace move_base {
         latest_plan_->clear();
         controller_plan_->clear();
         resetState();
+        ROS_ERROR("Dynamic reconfigure");
         tc_->setGoalManager(goal_manager_);
         propagateGoalTolerancesTo(tc_);
         tc_->initialize(blp_loader_.getName(config.base_local_planner), &tf_, controller_costmap_ros_);
@@ -913,7 +917,7 @@ namespace move_base {
           lock.unlock();
 
           //publish the goal point to the visualizer
-          ROS_DEBUG_NAMED("move_base","move_base has received a goal of x: %.2f, y: %.2f", goal.pose.position.x, goal.pose.position.y);
+          ROS_ERROR("move_base has received a goal of x: %.2f, y: %.2f", goal.pose.position.x, goal.pose.position.y);
           current_goal_pub_.publish(goal);
 
           //make sure to reset our timeouts
@@ -928,7 +932,7 @@ namespace move_base {
           resetState();
 
           //notify the ActionServer that we've successfully preempted
-          ROS_DEBUG_NAMED("move_base","Move base preempting the current goal");
+          ROS_ERROR("Move base preempting the current goal");
           as_->setPreempted();
 
           //we'll actually return from execute after preempting
@@ -945,6 +949,7 @@ namespace move_base {
         revertRecoveryChanges();
         resetRecoveryIndices();
         resetRecoveryCounters();
+        ROS_ERROR("New frame!");
         state_ = PLANNING;
 
         //we have a new goal so make sure the planner is awake
@@ -1033,6 +1038,7 @@ namespace move_base {
         revertRecoveryChanges();
         resetRecoveryIndices();
         resetRecoveryCounters();
+        ROS_ERROR("OScillating!");
       }
     }
 
@@ -1093,7 +1099,7 @@ namespace move_base {
 
         //check to see if we've reached our goal
         if(tc_->isGoalReached()){
-          ROS_DEBUG_NAMED("move_base","Goal reached!");
+          ROS_ERROR("Goal reached!");
           resetState();
 
           //disable the planner thread
@@ -1245,7 +1251,7 @@ namespace move_base {
 
           // Record the failed goal so in the next cycle we don't log a new message
           last_failed_goal_ = planner_goal_;
-
+ROS_ERROR("YEY!");
           resetState();
           return true;
         }
@@ -1400,6 +1406,7 @@ namespace move_base {
   }
 
   void MoveBase::resetState(){
+    ROS_ERROR("Resetting state");
     publishZeroVelocity();  // stop immediately
 
     goal_manager_->setActiveGoal(false);  // setting no active goal
@@ -1525,6 +1532,7 @@ namespace move_base {
 
   void MoveBase::resetRecoveryCounters()
   {
+    ROS_ERROR("Resetting recovery counters");
     // Reset the counter
     recovery_cycle_counter_ = 0;
 
