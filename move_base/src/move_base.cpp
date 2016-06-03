@@ -916,7 +916,7 @@ namespace move_base {
           lock.unlock();
 
           //publish the goal point to the visualizer
-          ROS_ERROR("move_base has received a goal of x: %.2f, y: %.2f", goal.pose.position.x, goal.pose.position.y);
+          ROS_DEBUG_NAMED("move_base","move_base has received a goal of x: %.2f, y: %.2f", goal.pose.position.x, goal.pose.position.y);
           current_goal_pub_.publish(goal);
 
           //make sure to reset our timeouts
@@ -931,7 +931,7 @@ namespace move_base {
           resetState();
 
           //notify the ActionServer that we've successfully preempted
-          ROS_DEBUG_NAMED("Move base preempting the current goal");
+          ROS_DEBUG_NAMED("move_base","Move base preempting the current goal");
           as_->setPreempted();
 
           //we'll actually return from execute after preempting
