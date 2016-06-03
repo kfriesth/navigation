@@ -88,7 +88,7 @@ namespace move_base {
     private_nh.param("oscillation_distance", oscillation_distance_, 0.5);
 
     private_nh.param("recovery_cycle_counter_cap", recovery_cycle_counter_cap_, 7);
-    private_nh.param("recovery_cycle_move_cap", recovery_cycle_move_cap_, 2.0);
+    private_nh.param("recovery_cycle_move_cap", recovery_cycle_move_cap_, 3.0);
 
     // Load goal tolerances (these will eventually be dynamic and come from the action server)
     // The goal tolerances contructor loads from goal_tolerance_xy and goal_tolerance_yaw
@@ -351,7 +351,6 @@ namespace move_base {
         latest_plan_->clear();
         controller_plan_->clear();
         resetState();
-        ROS_ERROR("Dynamic reconfigure");
         tc_->setGoalManager(goal_manager_);
         propagateGoalTolerancesTo(tc_);
         tc_->initialize(blp_loader_.getName(config.base_local_planner), &tf_, controller_costmap_ros_);
@@ -932,7 +931,7 @@ namespace move_base {
           resetState();
 
           //notify the ActionServer that we've successfully preempted
-          ROS_ERROR("Move base preempting the current goal");
+          ROS_DEBUG_NAMED("Move base preempting the current goal");
           as_->setPreempted();
 
           //we'll actually return from execute after preempting
@@ -949,7 +948,6 @@ namespace move_base {
         revertRecoveryChanges();
         resetRecoveryIndices();
         resetRecoveryCounters();
-        ROS_ERROR("New frame!");
         state_ = PLANNING;
 
         //we have a new goal so make sure the planner is awake
@@ -1038,7 +1036,6 @@ namespace move_base {
         revertRecoveryChanges();
         resetRecoveryIndices();
         resetRecoveryCounters();
-        ROS_ERROR("OScillating!");
       }
     }
 
@@ -1099,7 +1096,7 @@ namespace move_base {
 
         //check to see if we've reached our goal
         if(tc_->isGoalReached()){
-          ROS_ERROR("Goal reached!");
+          ROS_DEBUG_NAMED("move_base","Goal reached!");
           resetState();
 
           //disable the planner thread
@@ -1251,7 +1248,7 @@ namespace move_base {
 
           // Record the failed goal so in the next cycle we don't log a new message
           last_failed_goal_ = planner_goal_;
-ROS_ERROR("YEY!");
+
           resetState();
           return true;
         }
@@ -1405,8 +1402,9 @@ ROS_ERROR("YEY!");
     return;
   }
 
-  void MoveBase::resetState(){
-    ROS_ERROR("Resetting state");
+  void MoveBase::resetState()
+  {
+    ROS_DEBUG("MoveBase: Resetting state.");
     publishZeroVelocity();  // stop immediately
 
     goal_manager_->setActiveGoal(false);  // setting no active goal
@@ -1532,7 +1530,8 @@ ROS_ERROR("YEY!");
 
   void MoveBase::resetRecoveryCounters()
   {
-    ROS_ERROR("Resetting recovery counters");
+    ROS_INFO("MoveBase: Resetting recovery counters");
+
     // Reset the counter
     recovery_cycle_counter_ = 0;
 
@@ -1547,28 +1546,26 @@ ROS_ERROR("YEY!");
   bool MoveBase::forceGoalAbortInRecovery()
   {
     bool abort = false;
-    bool robot_has_moved_sufficiently = true;
+    bool robot_has_moved_sufficiently = false;
+    double travelled_dist = 0.0;
 
     // Decide if robot has moved sufficiently
     geometry_msgs::PoseStamped curr_pose;
     if (getCurrentRobotPose(planner_costmap_ros_, curr_pose) )
     {
-      robot_has_moved_sufficiently
-        = (distance(curr_pose, last_pose_at_recovery_reset_)
-        > recovery_cycle_move_cap_);
+      travelled_dist = distance(curr_pose, last_pose_at_recovery_reset_);
+      robot_has_moved_sufficiently = (travelled_dist > recovery_cycle_move_cap_);
     }
 
     if (robot_has_moved_sufficiently)
     {
-      ROS_ERROR("MoveBase: Robot has moved sufficiently (%.2f with cap %.2f)."
-        " Resetting recovery cycle counters.",
-        distance(curr_pose, last_pose_at_recovery_reset_),
-        recovery_cycle_move_cap_);
+      ROS_INFO("MoveBase: Robot has moved sufficiently (%.2f with cap %.2f)."
+        " Resetting recovery cycle counters.", travelled_dist, recovery_cycle_move_cap_);
       resetRecoveryCounters();
     }
     else if (recovery_cycle_counter_ > recovery_cycle_counter_cap_)
     {
-      ROS_ERROR("MoveBase: Recovery cycle counter cap reached and "
+      ROS_INFO("MoveBase: Recovery cycle counter cap reached and "
         "robot has not moved enough. Forcing goal abort.");
       resetRecoveryCounters();
       abort = true;
@@ -1576,7 +1573,7 @@ ROS_ERROR("YEY!");
     else
     {
       recovery_cycle_counter_++;
-      ROS_ERROR("MoveBase: Executing recovery cycle number %d/%d.",
+      ROS_INFO("MoveBase: Executing recovery cycle number %d/%d.",
         recovery_cycle_counter_, recovery_cycle_counter_cap_);
     }
 
