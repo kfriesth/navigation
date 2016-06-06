@@ -237,7 +237,7 @@ namespace move_base {
 
     // Initialize the recovery counters and indices
     resetRecoveryIndices();
-    resetRecoveryCounters();
+    resetRecoveryCycleState();
   }
 
   void MoveBase::reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level){
@@ -709,7 +709,7 @@ namespace move_base {
         recovery_cleanup_requested_ = false;
         revertRecoveryChanges();
         resetRecoveryIndices();
-        resetRecoveryCounters();
+        resetRecoveryCycleState();
       }
 
       ros::Time start_time = ros::Time::now();
@@ -905,7 +905,7 @@ namespace move_base {
           //we'll make sure that we reset our state for the next execution cycle
           revertRecoveryChanges();
           resetRecoveryIndices();
-          resetRecoveryCounters();
+          resetRecoveryCycleState();
           state_ = PLANNING;
 
           //we have a new goal so make sure the planner is awake
@@ -947,7 +947,7 @@ namespace move_base {
         //we want to go back to the planning state for the next execution cycle
         revertRecoveryChanges();
         resetRecoveryIndices();
-        resetRecoveryCounters();
+        resetRecoveryCycleState();
         state_ = PLANNING;
 
         //we have a new goal so make sure the planner is awake
@@ -1035,7 +1035,7 @@ namespace move_base {
       {
         revertRecoveryChanges();
         resetRecoveryIndices();
-        resetRecoveryCounters();
+        resetRecoveryCycleState();
       }
     }
 
@@ -1190,7 +1190,7 @@ namespace move_base {
 
         // Decide if this cycle of recovery should proceed as usual or if we should
         // force goal abort
-        bool force_abort = forceGoalAbortInRecovery();
+        bool force_abort = decideOnForcedGoalAbort();
 
         //we'll invoke whatever recovery behavior we're currently on if they're enabled
         if (recovery_behavior_enabled_
@@ -1417,7 +1417,7 @@ namespace move_base {
     // Reset statemachine
     revertRecoveryChanges();
     resetRecoveryIndices();
-    resetRecoveryCounters();
+    resetRecoveryCycleState();
     state_ = PLANNING;
     recovery_trigger_ = PLANNING_R;
 
@@ -1528,7 +1528,7 @@ namespace move_base {
     return true;
   }
 
-  void MoveBase::resetRecoveryCounters()
+  void MoveBase::resetRecoveryCycleState()
   {
     ROS_INFO("MoveBase: Resetting recovery counters");
 
@@ -1543,7 +1543,7 @@ namespace move_base {
     }
   }
 
-  bool MoveBase::forceGoalAbortInRecovery()
+  bool MoveBase::decideOnForcedGoalAbort()
   {
     bool abort = false;
     bool robot_has_moved_sufficiently = false;
@@ -1561,18 +1561,21 @@ namespace move_base {
     {
       ROS_INFO("MoveBase: Robot has moved sufficiently (%.2f with cap %.2f)."
         " Resetting recovery cycle counters.", travelled_dist, recovery_cycle_move_cap_);
-      resetRecoveryCounters();
+
+      resetRecoveryCycleState();
     }
     else if (recovery_cycle_counter_ > recovery_cycle_counter_cap_)
     {
       ROS_INFO("MoveBase: Recovery cycle counter cap reached and "
         "robot has not moved enough. Forcing goal abort.");
-      resetRecoveryCounters();
+
+      resetRecoveryCycleState();
       abort = true;
     }
     else
     {
       recovery_cycle_counter_++;
+
       ROS_INFO("MoveBase: Executing recovery cycle number %d/%d.",
         recovery_cycle_counter_, recovery_cycle_counter_cap_);
     }

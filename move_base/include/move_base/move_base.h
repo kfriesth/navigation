@@ -241,7 +241,7 @@ namespace move_base {
        * @brief Function that resets the recovery cycle counter and stores the
        * current pose of the robot based on the global costmap.
        */
-      void resetRecoveryCounters();
+      void resetRecoveryCycleState();
 
       /**
        * @brief Convenience function to return the current pose of the robot
@@ -258,7 +258,7 @@ namespace move_base {
        * in short range and if so to force goal abort up the stack.
        * @return True if goal should be aborted, false otherwise.
        */
-      bool forceGoalAbortInRecovery();
+      bool decideOnForcedGoalAbort();
 
       tf::TransformListener& tf_;
 
