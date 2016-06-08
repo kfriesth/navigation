@@ -55,8 +55,10 @@ namespace move_base {
     recovery_loader_("nav_core", "nav_core::RecoveryBehavior"),
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
     runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false),
-    new_global_plan_(false), recovery_cleanup_requested_(false),
-    nav_core_state_(new nav_core::State)
+    new_global_plan_(false), recovery_cleanup_requested_(false), nav_core_state_(new nav_core::State),
+    recovery_cycle_counter_(0),
+    recovery_cycle_counter_cap_(100),
+    recovery_cycle_move_cap_(2.0)
   {
     goal_manager_.reset(new nav_core::NavGoalMananger);
 
@@ -84,6 +86,9 @@ namespace move_base {
 
     private_nh.param("oscillation_timeout", oscillation_timeout_, 0.0);
     private_nh.param("oscillation_distance", oscillation_distance_, 0.5);
+
+    private_nh.param("recovery_cycle_counter_cap", recovery_cycle_counter_cap_, 7);
+    private_nh.param("recovery_cycle_move_cap", recovery_cycle_move_cap_, 3.0);
 
     // Load goal tolerances (these will eventually be dynamic and come from the action server)
     // The goal tolerances contructor loads from goal_tolerance_xy and goal_tolerance_yaw
@@ -119,6 +124,8 @@ namespace move_base {
     private_nh.param("shutdown_costmaps", shutdown_costmaps_, false);
     private_nh.param("clearing_rotation_allowed", clearing_rotation_allowed_, true);
     private_nh.param("recovery_behavior_enabled", recovery_behavior_enabled_, true);
+
+    private_nh.param<double>("minimum_goal_spacing_seconds", minimum_goal_spacing_seconds_, 0.5);
 
     //create the ros wrapper for the planner's costmap... and initializer a pointer we'll use with the underlying map
     planner_costmap_ros_ = new costmap_2d::Costmap2DROS("global_costmap", tf_);
@@ -210,10 +217,6 @@ namespace move_base {
     //initially, we'll need to make a plan
     state_ = PLANNING;
 
-    //we'll start executing recovery behaviors at the beginning of our list
-    recovery_index_ = 0;
-    active_recovery_index_ = -1;
-
     //we're all set up now so we can start the action server
     as_->start();
 
@@ -229,6 +232,13 @@ namespace move_base {
     nav_core_state_->local_costmap_ = controller_costmap_ros_;
     nav_core_state_->global_planner_ = planner_;
     nav_core_state_->local_planner_ = tc_;
+
+    // Initialize the last faild goal so that we can see goal abort message
+    last_failed_goal_.pose.position.x = FLT_MAX;
+
+    // Initialize the recovery counters and indices
+    resetRecoveryIndices();
+    resetRecoveryCycleState();
   }
 
   void MoveBase::reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level){
@@ -301,8 +311,6 @@ namespace move_base {
         runPlanner_ = false;
         recovery_cleanup_requested_ = true;
         state_ = PLANNING;
-        recovery_index_ = 0;
-        active_recovery_index_ = -1;
         recovery_trigger_ = PLANNING_R;
         publishZeroVelocity();
 
@@ -702,6 +710,7 @@ namespace move_base {
         recovery_cleanup_requested_ = false;
         revertRecoveryChanges();
         resetRecoveryIndices();
+        resetRecoveryCycleState();
       }
 
       ros::Time start_time = ros::Time::now();
@@ -813,6 +822,22 @@ namespace move_base {
 
   void MoveBase::executeCb(const move_base_msgs::MoveBaseGoalConstPtr& move_base_goal)
   {
+    ros::Time ros_time_now = ros::Time::now();
+
+    // CORE-3994
+    // Protect against goals being sent too quickly by aborting them
+    // This is a stop-gap until we can use a full action server
+    const double consecutive_goal_time = (ros_time_now - last_execute_callback_).toSec();
+    if (consecutive_goal_time < minimum_goal_spacing_seconds_)
+    {
+      ROS_ERROR_THROTTLE(1, "move_base: Aborting on goal because it was sent too soon after the last goal %gs < %gs",
+                             consecutive_goal_time, minimum_goal_spacing_seconds_);
+      as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent too soon after the last goal");
+      goal_manager_->setActiveGoal(false);  // setting no active goal
+      return;
+    }
+    last_execute_callback_ = ros_time_now;
+
     // The Action Server can call the callback on a null ptr. Before doing this it will
     // issue a ROS_ERROR with the text:
     //    Attempting to accept the next goal when a new goal is not available
@@ -892,6 +917,7 @@ namespace move_base {
           //we'll make sure that we reset our state for the next execution cycle
           revertRecoveryChanges();
           resetRecoveryIndices();
+          resetRecoveryCycleState();
           state_ = PLANNING;
 
           //we have a new goal so make sure the planner is awake
@@ -933,6 +959,7 @@ namespace move_base {
         //we want to go back to the planning state for the next execution cycle
         revertRecoveryChanges();
         resetRecoveryIndices();
+        resetRecoveryCycleState();
         state_ = PLANNING;
 
         //we have a new goal so make sure the planner is awake
@@ -1020,6 +1047,7 @@ namespace move_base {
       {
         revertRecoveryChanges();
         resetRecoveryIndices();
+        resetRecoveryCycleState();
       }
     }
 
@@ -1169,14 +1197,24 @@ namespace move_base {
 
       //we'll try to clear out space with any user-provided recovery behaviors
       case CLEARING:
+      {
         ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
-        if (planner_)
-        {
-          // This invokes the planner's prepareForPostRecovery method to prepare it for post-recovery actions.
-          planner_->prepareForPostRecovery();
-        }
+
+        // Decide if this cycle of recovery should proceed as usual or if we should
+        // force goal abort
+        bool force_abort = decideOnForcedGoalAbort();
+
         //we'll invoke whatever recovery behavior we're currently on if they're enabled
-        if(recovery_behavior_enabled_ && recovery_index_ < recovery_behaviors_.size()){
+        if (recovery_behavior_enabled_
+          && recovery_index_ < recovery_behaviors_.size()
+          && !force_abort)
+        {
+          if (planner_)
+          {
+            // This invokes the planner's prepareForPostRecovery method to prepare it for post-recovery actions.
+            planner_->prepareForPostRecovery();
+          }
+
           ROS_DEBUG_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_, recovery_behaviors_.size());
           active_recovery_index_ = recovery_index_;
           recovery_behaviors_[recovery_index_]->runBehavior();
@@ -1387,7 +1425,11 @@ namespace move_base {
     return;
   }
 
-  void MoveBase::resetState(){
+  void MoveBase::resetState()
+  {
+    ROS_DEBUG("MoveBase: Resetting state.");
+    publishZeroVelocity();  // stop immediately
+
     goal_manager_->setActiveGoal(false);  // setting no active goal
 
     // Disable the planner thread
@@ -1398,9 +1440,9 @@ namespace move_base {
     // Reset statemachine
     revertRecoveryChanges();
     resetRecoveryIndices();
+    resetRecoveryCycleState();
     state_ = PLANNING;
     recovery_trigger_ = PLANNING_R;
-    publishZeroVelocity();
 
     //if we shutdown our costmaps when we're deactivated... we'll do that now
     if(shutdown_costmaps_){
@@ -1449,6 +1491,11 @@ namespace move_base {
       active_recovery_index_ >= 0 &&
       active_recovery_index_ < static_cast<int>(recovery_behaviors_.size()))
     {
+      // First ensure that we're setting velocities to zero so that we're in a safe state
+      // in case reverting a behaviour is time consuming
+      publishZeroVelocity();
+
+      // Now revert the changed caused by the active behaviour
       recovery_behaviors_[active_recovery_index_]->revertChanges();
     }
   }
@@ -1482,5 +1529,80 @@ namespace move_base {
     // set a new active goal. For now we will allow behaviours to stop
     // due to no active goal
     goal_manager_->setActiveGoal(false);
+  }
+
+  bool MoveBase::getCurrentRobotPose(costmap_2d::Costmap2DROS* costmap,
+    geometry_msgs::PoseStamped& robot_pose)
+  {
+    if (costmap == NULL)
+    {
+      return false;
+    }
+
+    tf::Stamped<tf::Pose> pose;
+    if (!costmap->getRobotPose(pose) )
+    {
+      return false;
+    }
+
+    // Get the current pose of the robot
+    tf::poseStampedTFToMsg(pose, robot_pose);
+
+    return true;
+  }
+
+  void MoveBase::resetRecoveryCycleState()
+  {
+    ROS_INFO("MoveBase: Resetting recovery counters");
+
+    // Reset the counter
+    recovery_cycle_counter_ = 0;
+
+    // Store the pose
+    geometry_msgs::PoseStamped curr_pose;
+    if (getCurrentRobotPose(planner_costmap_ros_, curr_pose) )
+    {
+      last_pose_at_recovery_reset_ = curr_pose;
+    }
+  }
+
+  bool MoveBase::decideOnForcedGoalAbort()
+  {
+    bool abort = false;
+    bool robot_has_moved_sufficiently = false;
+    double travelled_dist = 0.0;
+
+    // Decide if robot has moved sufficiently
+    geometry_msgs::PoseStamped curr_pose;
+    if (getCurrentRobotPose(planner_costmap_ros_, curr_pose) )
+    {
+      travelled_dist = distance(curr_pose, last_pose_at_recovery_reset_);
+      robot_has_moved_sufficiently = (travelled_dist > recovery_cycle_move_cap_);
+    }
+
+    if (robot_has_moved_sufficiently)
+    {
+      ROS_INFO("MoveBase: Robot has moved sufficiently (%.2f with cap %.2f)."
+        " Resetting recovery cycle counters.", travelled_dist, recovery_cycle_move_cap_);
+
+      resetRecoveryCycleState();
+    }
+    else if (recovery_cycle_counter_ > recovery_cycle_counter_cap_)
+    {
+      ROS_INFO("MoveBase: Recovery cycle counter cap reached and "
+        "robot has not moved enough. Forcing goal abort.");
+
+      resetRecoveryCycleState();
+      abort = true;
+    }
+    else
+    {
+      recovery_cycle_counter_++;
+
+      ROS_INFO("MoveBase: Executing recovery cycle number %d/%d.",
+        recovery_cycle_counter_, recovery_cycle_counter_cap_);
+    }
+
+    return abort;
   }
 };

@@ -245,6 +245,28 @@ namespace move_base {
        */
       void asPreemptCallback();
 
+      /**
+       * @brief Function that resets the recovery cycle counter and stores the
+       * current pose of the robot based on the global costmap.
+       */
+      void resetRecoveryCycleState();
+
+      /**
+       * @brief Convenience function to return the current pose of the robot
+       * based on a given costmap.
+       * @param costmap Pointer to costmap object.
+       * @param[out] robot_pose The pose of the robot on the costmap.
+       * @return True if successful, false otherwise.
+       */
+      bool getCurrentRobotPose(costmap_2d::Costmap2DROS* costmap,
+        geometry_msgs::PoseStamped& robot_pose);
+
+      /**
+       * @brief Function to decide if too many cycles of recovery has been executed
+       * in short range and if so to force goal abort up the stack.
+       * @return True if goal should be aborted, false otherwise.
+       */
+      bool decideOnForcedGoalAbort();
 
       tf::TransformListener& tf_;
 
@@ -315,6 +337,41 @@ namespace move_base {
        * @brief Smart pointer to container object to share costmaps and planners
        */
       nav_core::State::Ptr nav_core_state_;
+
+      /**
+       * @brief The last time the action server triggered the execute callback.
+       *        Initial value is the start of the epoch
+       */
+      ros::Time last_execute_callback_;
+
+      /**
+       * @brief The number of seconds that are required to elapse between calls to
+       *        the execute callback via the actions server. Calls faster than this
+       *        will cause the goal to be aborted. Default 0.5 (seconds)
+       */
+      double minimum_goal_spacing_seconds_;
+
+      /*
+       * @brief Counter for the number of times move_base has gone into recovery.
+       */
+      int recovery_cycle_counter_;
+
+      /**
+       * @brief Counter cap for the number of times move_base has gone into recovery
+       * but the robot hasn't moved in any meaningful way.
+       */
+      int recovery_cycle_counter_cap_;
+
+      /**
+       * @brief Euclidean distance cap on the amount of robot travel before resetting
+       * the recovery cycle counters.
+       */
+      double recovery_cycle_move_cap_;
+
+      /**
+       * @brief Record of the last pose at which the recovery cycle counter is reset.
+       */
+      geometry_msgs::PoseStamped last_pose_at_recovery_reset_;
   };
 };
 #endif
