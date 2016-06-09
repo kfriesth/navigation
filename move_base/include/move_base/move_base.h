@@ -70,7 +70,8 @@ namespace move_base {
   enum MoveBaseState {
     PLANNING,
     CONTROLLING,
-    CLEARING
+    RECOVERY,
+    FAILED
   };
 
   enum RecoveryTrigger
@@ -78,6 +79,12 @@ namespace move_base {
     PLANNING_R,
     CONTROLLING_R,
     OSCILLATION_R
+  };
+
+  enum FailureMode
+  {
+    RECOVERY_F,
+    PLANNING_F
   };
 
   /**
@@ -137,9 +144,10 @@ namespace move_base {
        * @brief  Make a new global plan
        * @param  goal The goal to plan to
        * @param  plan Will be filled in with the plan made by the planner
+       * @param  planner_status Status returned from the planner
        * @return  True if planning succeeds, false otherwise
        */
-      bool makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan);
+      bool makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan, int& planner_status);
 
       /**
        * @brief  Load the recovery behaviors for the navigation stack from the parameter server
@@ -287,6 +295,7 @@ namespace move_base {
 
       MoveBaseState state_;
       RecoveryTrigger recovery_trigger_;
+      FailureMode failure_mode_;
 
       ros::Time last_valid_plan_, last_valid_control_, last_oscillation_reset_;
       geometry_msgs::PoseStamped oscillation_pose_;
