@@ -76,6 +76,11 @@ public:
   GoalTolerances(float goal_tolerance_xy, float goal_tolerance_yaw)
     : goal_tolerance_xy_(goal_tolerance_xy), goal_tolerance_yaw_(goal_tolerance_yaw)
   {
+    use_relative_tolerances_ = false;
+    tolerance_left_ = goal_tolerance_xy_;
+    tolerance_right_ = goal_tolerance_xy_;
+    tolerance_front_ = goal_tolerance_xy_;
+    tolerance_back_ = goal_tolerance_xy_;
   }
 
   /**
@@ -88,15 +93,35 @@ public:
 
   /**
    * @brief Use goal tolerances to determine if poses are equal
-   * @param a Pose A
-   * @param b Pose B
+   * @param target Pose to be compared to
+   * @param test Pose to be tested against target pose
    * @return true if distance and yaw offsets are less than goal tolerances
    */
-  bool equalUnderTolerances(const geometry_msgs::PoseStamped& a, const geometry_msgs::PoseStamped& b) const
+  bool equalUnderTolerances(const geometry_msgs::PoseStamped& target,
+                            const geometry_msgs::PoseStamped& test) const
   {
-    const float delta_yaw = tf::getYaw(a.pose.orientation) - tf::getYaw(b.pose.orientation);
-    const float delta_x = a.pose.position.x - b.pose.position.x;
-    const float delta_y = a.pose.position.y - b.pose.position.y;
+    if (use_relative_tolerances_)
+    {
+      return equalUnderRelativeTolerances(target, test);
+    }
+    else
+    {
+      return equalUnderGlobalTolerances(target, test);
+    }
+  }
+
+  /**
+   * @brief Use goal tolerances to determine if poses are equal under global constraints
+   * @param target Pose to be compared to
+   * @param test Pose to be tested against target pose
+   * @return true if distance and yaw offsets are less than goal tolerances
+   */
+  bool equalUnderGlobalTolerances(const geometry_msgs::PoseStamped& target,
+                                  const geometry_msgs::PoseStamped& test) const
+  {
+    const float delta_yaw = tf::getYaw(target.pose.orientation) - tf::getYaw(test.pose.orientation);
+    const float delta_x = target.pose.position.x - test.pose.position.x;
+    const float delta_y = target.pose.position.y - test.pose.position.y;
 
     return lessThanTolerances(delta_x, delta_y, delta_yaw);
   }
@@ -113,6 +138,84 @@ public:
     return (dx * dx + dy * dy <= goal_tolerance_xy_ * goal_tolerance_xy_) &
            (fmod(fabs(dyaw), 2.0 * M_PI) <= goal_tolerance_yaw_);
   }
+
+  /**
+   * @brief Use goal tolerances to determine if poses are equal under relative constraints
+   * @param target Pose to be compared to
+   * @param test Pose to be tested against target pose
+   * @return true if relative distance and yaw offsets are less than goal tolerances
+   */
+  bool equalUnderRelativeTolerances(const geometry_msgs::PoseStamped& target,
+                                    const geometry_msgs::PoseStamped& test) const
+  {
+    // need to use target as the origin for test pose
+    const float test_relative_x = test.pose.position.x - target.pose.position.x;
+    const float test_relative_y = test.pose.position.y - target.pose.position.y;
+
+    // and rotate tests by -target.yaw
+    float sin_neg_yaw, cos_neg_yaw;
+    sincosf(-tf::getYaw(target.pose.orientation), &sin_neg_yaw, &cos_neg_yaw);
+
+    const float rotated_test_relative_x = cos_neg_yaw * test_relative_x - sin_neg_yaw * test_relative_y;
+    const float rotated_test_relative_y = sin_neg_yaw * test_relative_x + cos_neg_yaw * test_relative_y;
+
+    // now have enough info to make relative decisions. +x is forward, -x is backward
+    // -y is right and +y is left
+
+    if (rotated_test_relative_x > tolerance_front_)
+    {
+      return false;
+    }
+
+    if (rotated_test_relative_x < -tolerance_back_)
+    {
+      return false;
+    }
+
+    if (rotated_test_relative_y > tolerance_left_)
+    {
+      return false;
+    }
+
+    if (rotated_test_relative_y < -tolerance_right_)
+    {
+      return false;
+    }
+
+    // relative goal tolerances met, check yaw tolerance
+    const float delta_yaw = tf::getYaw(target.pose.orientation) - tf::getYaw(test.pose.orientation);
+
+    return lessThanTolerances(0, 0, delta_yaw);
+  }
+
+  /**
+   * @brief Enable and set relative goal tolerance checks
+   * @param tolerance_left_right left/right slop allowed about target
+   * @param tolerance_front_back forward/back slop allowed about target
+   */
+  void setRelativeTolerances(float tolerance_left_right, float tolerance_front_back)
+  {
+    setRelativeTolerances(tolerance_left_right, tolerance_left_right,
+                          tolerance_front_back, tolerance_front_back);
+  }
+
+  /**
+   * @brief Enable and set relative goal tolerance checks
+   * @param tolerance_left left slop allowed about target
+   * @param tolerance_right right slop allowed about target
+   * @param tolerance_front front slop allowed about target
+   * @param tolerance_back back slop allowed about target
+   */
+  void setRelativeTolerances(float tolerance_left, float tolerance_right,
+                             float tolerance_front, float tolerance_back)
+  {
+    tolerance_left_ = tolerance_left;
+    tolerance_right_ = tolerance_right;
+    tolerance_front_ = tolerance_front;
+    tolerance_back_ = tolerance_back;
+    use_relative_tolerances_ = true;
+  }
+
   /**
    * @brief Distance in R2 between goal and a pose above which it can be declared
    *        that the goal has not been achieved
@@ -125,6 +228,40 @@ public:
    */
   float goal_tolerance_yaw_;
 
+
+  /**
+   * @brief Decides if relative tolerances should be used or gobal tolerances (xy)
+   */
+  bool use_relative_tolerances_;
+
+  /**
+   * @brief Distance in meters to the left of the goal pose above which it can be declared
+   *        that the goal has not been achieved. Only considered if use_relative_tolerances_
+   *        is true
+   */
+  float tolerance_left_;
+
+  /**
+   * @brief Distance in meters to the right of the goal pose above which it can be declared
+   *        that the goal has not been achieved. Only considered if use_relative_tolerances_
+   *        is true
+   */
+  float tolerance_right_;
+
+  /**
+   * @brief Distance in meters to the front of the goal pose above which it can be declared
+   *        that the goal has not been achieved. Only considered if use_relative_tolerances_
+   *        is true
+   */
+  float tolerance_front_;
+
+  /**
+   * @brief Distance in meters to the back of the goal pose above which it can be declared
+   *        that the goal has not been achieved. Only considered if use_relative_tolerances_
+   *        is true
+   */
+  float tolerance_back_;
+
 protected:
   /**
    * @brief Set the default values
@@ -133,6 +270,12 @@ protected:
   {
     goal_tolerance_xy_ = 0.05;
     goal_tolerance_yaw_ = 0.05;
+
+    use_relative_tolerances_ = false;
+    tolerance_left_ = goal_tolerance_xy_;
+    tolerance_right_ = goal_tolerance_xy_;
+    tolerance_front_ = goal_tolerance_xy_;
+    tolerance_back_ = goal_tolerance_xy_;
   }
 };
 }  // namespace nav_core

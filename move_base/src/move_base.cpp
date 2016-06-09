@@ -820,6 +820,39 @@ namespace move_base {
     }
   }
 
+  void MoveBase::applyGoalToleranceAttributes(const move_base_msgs::AugmentedMoveBaseGoalConstPtr& move_base_goal,
+                                              nav_core::GoalTolerances::Ptr tolerance)
+  {
+    // Get the XY goal tolerance with a default of the param file value
+    autonomy_msgs::utils::getAttribute(*move_base_goal,
+                                       "tolerance_xy",
+                                       tolerance->goal_tolerance_xy_,
+                                       default_goal_tolerances_->goal_tolerance_xy_);
+
+    // Get the Yaw goal tolerance with a default of the param file value
+    autonomy_msgs::utils::getAttribute(*move_base_goal,
+                                       "tolerance_yaw",
+                                       tolerance->goal_tolerance_yaw_,
+                                       default_goal_tolerances_->goal_tolerance_yaw_);
+
+    // if any relative tolerance is defined, we will enable relative tolerance checking
+    float tolerance_left = 0;
+    float tolerance_right = 0;
+    float tolerance_front = 0;
+    float tolerance_back = 0;
+    bool use_relative_tolerances = false;
+
+    use_relative_tolerances |= autonomy_msgs::utils::getAttribute(*move_base_goal, "tolerance_left", tolerance_left);
+    use_relative_tolerances |= autonomy_msgs::utils::getAttribute(*move_base_goal, "tolerance_right", tolerance_right);
+    use_relative_tolerances |= autonomy_msgs::utils::getAttribute(*move_base_goal, "tolerance_front", tolerance_front);
+    use_relative_tolerances |= autonomy_msgs::utils::getAttribute(*move_base_goal, "tolerance_back", tolerance_back);
+
+    if (use_relative_tolerances)
+    {
+      tolerance->setRelativeTolerances(tolerance_left, tolerance_right, tolerance_front, tolerance_back);
+    }
+  }
+
   void MoveBase::executeCb(const move_base_msgs::AugmentedMoveBaseGoalConstPtr& move_base_goal)
   {
     ros::Time ros_time_now = ros::Time::now();
@@ -860,17 +893,8 @@ namespace move_base {
     geometry_msgs::PoseStamped goal = goalToGlobalFrame(move_base_goal->target_pose);
     goal_manager_->setCurrentGoal(nav_core::NavGoal(goal));
 
-    // Get the XY goal tolerance with a default of the param file value
-    autonomy_msgs::utils::getAttribute(*move_base_goal,
-                                       "tolerance_xy",
-                                       goal_tolerances_->goal_tolerance_xy_,
-                                       default_goal_tolerances_->goal_tolerance_xy_);
-
-    // Get the Yaw goal tolerance with a default of the param file value
-    autonomy_msgs::utils::getAttribute(*move_base_goal,
-                                       "tolerance_yaw",
-                                       goal_tolerances_->goal_tolerance_yaw_,
-                                       default_goal_tolerances_->goal_tolerance_yaw_);
+    // Translate tolerance related attributes into goal tolerances
+    applyGoalToleranceAttributes(move_base_goal, goal_tolerances_);
 
     // Update goal tolerance for this object and all designated propagated objects (planners, tracker, etc)
     setGoalTolerances(goal_tolerances_);
@@ -1292,7 +1316,7 @@ namespace move_base {
         else if (failure_mode_ == PLANNING_F)
         {
           ROS_ERROR_COND(log_condition, "Fatal planning error.");
-          as_->setAborted(move_base_msgs::MoveBaseResult(), "Fatal planning error.");
+          as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Fatal planning error.");
         }
 
         // Record the failed goal so in the next cycle we don't log a new message

@@ -268,6 +268,14 @@ namespace move_base {
        */
       bool decideOnForcedGoalAbort();
 
+      /**
+       * @brief Check the move_base_goal for attributes and apply them to the given tolerance object
+       * @param move_base_goal The goal that may contain tolerance attributes
+       * @param tolerance The object that will be modified by the attributes
+       */
+      void applyGoalToleranceAttributes(const move_base_msgs::AugmentedMoveBaseGoalConstPtr& move_base_goal,
+                                        nav_core::GoalTolerances::Ptr tolerance);
+
       tf::TransformListener& tf_;
 
       MoveBaseActionServer* as_;
