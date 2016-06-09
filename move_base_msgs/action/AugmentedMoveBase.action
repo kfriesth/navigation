@@ -1,0 +1,25 @@
+# The goal
+geometry_msgs/PoseStamped target_pose
+# Optional attributes of the goal
+autonomy_msgs/Attribute[] attributes
+uint8[] data
+# Goal ID, used to differentiate goals
+string id
+---
+
+# The result
+geometry_msgs/PoseStamped result_pose
+# Optional attributes of the result
+autonomy_msgs/Attribute[] attributes
+uint8[] data
+# Goal ID, used to differentiate goals
+string id
+---
+
+# The feedback
+geometry_msgs/PoseStamped base_position
+# Optional attributes of the feedback
+autonomy_msgs/Attribute[] attributes
+uint8[] data
+# Goal ID, used to differentiate goals
+string id

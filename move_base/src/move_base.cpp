@@ -41,6 +41,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/thread.hpp>
 
+#include <autonomy_msgs_utils/attribute_helper.h>
 #include <geometry_msgs/Twist.h>
 #include <angles/angles.h>
 
@@ -94,6 +95,8 @@ namespace move_base {
     // The goal tolerances contructor loads from goal_tolerance_xy and goal_tolerance_yaw
     goal_tolerances_ = nav_core::GoalTolerances::Ptr(new nav_core::GoalTolerances(private_nh));
 
+    default_goal_tolerances_ = nav_core::GoalTolerances::Ptr(new nav_core::GoalTolerances(private_nh));
+
     //set up plan triple buffer
     planner_plan_ = new std::vector<geometry_msgs::PoseStamped>();
     latest_plan_ = new std::vector<geometry_msgs::PoseStamped>();
@@ -107,7 +110,7 @@ namespace move_base {
     current_goal_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("current_goal", 0 );
 
     ros::NodeHandle action_nh("move_base");
-    action_goal_pub_ = action_nh.advertise<move_base_msgs::MoveBaseActionGoal>("goal", 1);
+    action_goal_pub_ = action_nh.advertise<move_base_msgs::AugmentedMoveBaseActionGoal>("goal", 1);
 
     //we'll provide a mechanism for some people to send goals as PoseStamped messages over a topic
     //they won't get any useful information back about its status, but this is useful for tools
@@ -371,7 +374,7 @@ namespace move_base {
 
   void MoveBase::goalCB(const geometry_msgs::PoseStamped::ConstPtr& goal){
     ROS_DEBUG_NAMED("move_base","In ROS goal callback, wrapping the PoseStamped in the action message and re-sending to the server.");
-    move_base_msgs::MoveBaseActionGoal action_goal;
+    move_base_msgs::AugmentedMoveBaseActionGoal action_goal;
     action_goal.header.stamp = ros::Time::now();
     action_goal.goal.target_pose = *goal;
     goal_manager_->setCurrentGoal(nav_core::NavGoal(*goal));
@@ -808,7 +811,7 @@ namespace move_base {
     }
   }
 
-  void MoveBase::executeCb(const move_base_msgs::MoveBaseGoalConstPtr& move_base_goal)
+  void MoveBase::executeCb(const move_base_msgs::AugmentedMoveBaseGoalConstPtr& move_base_goal)
   {
     ros::Time ros_time_now = ros::Time::now();
 
@@ -820,7 +823,7 @@ namespace move_base {
     {
       ROS_ERROR_THROTTLE(1, "move_base: Aborting on goal because it was sent too soon after the last goal %gs < %gs",
                              consecutive_goal_time, minimum_goal_spacing_seconds_);
-      as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent too soon after the last goal");
+      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent too soon after the last goal");
       goal_manager_->setActiveGoal(false);  // setting no active goal
       return;
     }
@@ -834,19 +837,34 @@ namespace move_base {
     // CORE-3682
     if (move_base_goal.get() == NULL)
     {
-      as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was a NULL pointer");
+      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was a NULL pointer");
       goal_manager_->setActiveGoal(false);  // setting no active goal
       return;
     }
 
     if(!isQuaternionValid(move_base_goal->target_pose.pose.orientation)){
-      as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
+      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
       goal_manager_->setActiveGoal(false);  // setting no active goal
       return;
     }
 
     geometry_msgs::PoseStamped goal = goalToGlobalFrame(move_base_goal->target_pose);
     goal_manager_->setCurrentGoal(nav_core::NavGoal(goal));
+
+    // Get the XY goal tolerance with a default of the param file value
+    autonomy_msgs::utils::getAttribute(*move_base_goal,
+                                       "tolerance_xy",
+                                       goal_tolerances_->goal_tolerance_xy_,
+                                       default_goal_tolerances_->goal_tolerance_xy_);
+
+    // Get the Yaw goal tolerance with a default of the param file value
+    autonomy_msgs::utils::getAttribute(*move_base_goal,
+                                       "tolerance_yaw",
+                                       goal_tolerances_->goal_tolerance_yaw_,
+                                       default_goal_tolerances_->goal_tolerance_yaw_);
+
+    // Update goal tolerance for this object and all designated propagated objects (planners, tracker, etc)
+    setGoalTolerances(goal_tolerances_);
 
     //we have a goal so start the planner
     boost::unique_lock<boost::mutex> lock(planner_mutex_);
@@ -883,18 +901,18 @@ namespace move_base {
       if(as_->isPreemptRequested()){
         if(as_->isNewGoalAvailable()){
           //if we're active and a new goal is available, we'll accept it, but we won't shut anything down
-          move_base_msgs::MoveBaseGoalConstPtr new_goal_ptr = as_->acceptNewGoal();
+          move_base_msgs::AugmentedMoveBaseGoalConstPtr new_goal_ptr = as_->acceptNewGoal();
 
           if (new_goal_ptr.get() == NULL)
           {
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was NULL");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was NULL");
             goal_manager_->setActiveGoal(false);  // setting no active goal
             return;
           }
 
-          move_base_msgs::MoveBaseGoal new_goal = *new_goal_ptr;
+          move_base_msgs::AugmentedMoveBaseGoal new_goal = *new_goal_ptr;
           if(!isQuaternionValid(new_goal.target_pose.pose.orientation)){
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
             goal_manager_->setActiveGoal(false);  // setting no active goal
             return;
           }
@@ -995,7 +1013,7 @@ namespace move_base {
     lock.unlock();
 
     //if the node is killed then we'll abort and return
-    as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on the goal because the node has been killed");
+    as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on the goal because the node has been killed");
     return;
   }
 
@@ -1072,7 +1090,7 @@ namespace move_base {
         runPlanner_ = false;
         lock.unlock();
 
-        as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to pass global plan to the controller.");
+        as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to pass global plan to the controller.");
         return true;
       }
     }
@@ -1104,7 +1122,7 @@ namespace move_base {
           runPlanner_ = false;
           lock.unlock();
 
-          as_->setSucceeded(move_base_msgs::MoveBaseResult(), "Goal reached.");
+          as_->setSucceeded(move_base_msgs::AugmentedMoveBaseResult(), "Goal reached.");
           return true;
         }
 
@@ -1235,15 +1253,15 @@ namespace move_base {
 
           if(recovery_trigger_ == CONTROLLING_R){
             ROS_ERROR_COND(log_condition, "Aborting because a valid control could not be found. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid control. Even after executing recovery behaviors.");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to find a valid control. Even after executing recovery behaviors.");
           }
           else if(recovery_trigger_ == PLANNING_R){
             ROS_ERROR_COND(log_condition, "Aborting because a valid plan could not be found. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid plan. Even after executing recovery behaviors.");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to find a valid plan. Even after executing recovery behaviors.");
           }
           else if(recovery_trigger_ == OSCILLATION_R){
             ROS_ERROR_COND(log_condition, "Aborting because the robot appears to be oscillating over and over. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Robot is oscillating. Even after executing recovery behaviors.");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Robot is oscillating. Even after executing recovery behaviors.");
           }
 
           // Record the failed goal so in the next cycle we don't log a new message
@@ -1261,7 +1279,7 @@ namespace move_base {
         boost::unique_lock<boost::mutex> lock(planner_mutex_);
         runPlanner_ = false;
         lock.unlock();
-        as_->setAborted(move_base_msgs::MoveBaseResult(), "Reached a case that should not be hit in move_base. This is a bug, please report it.");
+        as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Reached a case that should not be hit in move_base. This is a bug, please report it.");
         return true;
     }
 
@@ -1494,7 +1512,7 @@ namespace move_base {
       tf::poseStampedTFToMsg(global_pose, current_position);
 
       //push the feedback out
-      move_base_msgs::MoveBaseFeedback feedback;
+      move_base_msgs::AugmentedMoveBaseFeedback feedback;
       feedback.base_position = current_position;
       as_->publishFeedback(feedback);
     }

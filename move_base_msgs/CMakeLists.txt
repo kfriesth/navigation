@@ -5,6 +5,7 @@ find_package(catkin REQUIRED
     COMPONENTS
         message_generation
         actionlib_msgs
+        autonomy_msgs
         geometry_msgs
         )
 
@@ -14,11 +15,13 @@ add_action_files(
     DIRECTORY action
     FILES
         MoveBase.action
+        AugmentedMoveBase.action
 )
 
 generate_messages(
     DEPENDENCIES
         actionlib_msgs
+        autonomy_msgs
         geometry_msgs
 )
 
