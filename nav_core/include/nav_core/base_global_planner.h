@@ -59,16 +59,21 @@ namespace nav_core {
 
       /**
        * @brief Given a goal pose in the world, compute a plan. The implementation of this method is
-       *        responsible for locking the costmap mutex.
+       *        responsible for locking the costmap mutex. An empty default implementation is given to
+       *        allow for either the 3 arg or 4 arg makePlan to be implemented, without forcing a
+       *        boilerplate 3 arg version to be added.
        * @param start The start pose
        * @param goal The goal pose
        * @param plan The plan... filled by the planner
        * @return True if a valid plan was found, false otherwise
        */
       virtual bool makePlan(const geometry_msgs::PoseStamped& start,
-          const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan) = 0;
+          const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan)
+      {
+        return false;
+      }
 
-/**
+      /**
        * @brief Given a goal pose in the world, compute a plan. The implementation of this method is
        *        responsible for locking the costmap mutex.
        * @param start The start pose
