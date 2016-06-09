@@ -43,7 +43,7 @@
 #include <ros/ros.h>
 
 #include <actionlib/server/simple_action_server.h>
-#include <move_base_msgs/MoveBaseAction.h>
+#include <move_base_msgs/AugmentedMoveBaseAction.h>
 
 #include <nav_core/base_local_planner.h>
 #include <nav_core/base_global_planner.h>
@@ -65,7 +65,7 @@
 
 namespace move_base {
   //typedefs to help us out with the action server so that we don't hace to type so much
-  typedef actionlib::SimpleActionServer<move_base_msgs::MoveBaseAction> MoveBaseActionServer;
+  typedef actionlib::SimpleActionServer<move_base_msgs::AugmentedMoveBaseAction> MoveBaseActionServer;
 
   enum MoveBaseState {
     PLANNING,
@@ -174,7 +174,7 @@ namespace move_base {
 
       void planThread();
 
-      void executeCb(const move_base_msgs::MoveBaseGoalConstPtr& move_base_goal);
+      void executeCb(const move_base_msgs::AugmentedMoveBaseGoalConstPtr& move_base_goal);
 
       bool isQuaternionValid(const geometry_msgs::Quaternion& q);
 
@@ -319,6 +319,12 @@ namespace move_base {
        *        will cause the goal to be aborted. Default 0.5 (seconds)
        */
       double minimum_goal_spacing_seconds_;
+
+      /**
+       * @brief snapshot of default goal tolerances
+       */
+      nav_core::GoalTolerances::Ptr default_goal_tolerances_;
+
   };
 };
 #endif
