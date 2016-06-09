@@ -226,7 +226,7 @@ namespace move_base {
 
     // Create and start the timer for publishing action server feedback
     as_feedback_timer_ = nh.createTimer(ros::Duration(0.05), &MoveBase::asFeedbackTimerCallback, this);
-    
+
     nav_core_state_->global_costmap_ = planner_costmap_ros_;
     nav_core_state_->local_costmap_ = controller_costmap_ros_;
     nav_core_state_->global_planner_ = planner_;
@@ -724,7 +724,15 @@ namespace move_base {
       int planner_status = nav_core::status::UNDEFINED;
       bool gotPlan = n.ok() && makePlan(planned_goal, *planner_plan_, planner_status);
 
-      if(gotPlan){
+      if (planner_status == nav_core::status::FATAL)
+      {
+        // Hit an unrecoverable error, move_base should abort planning
+        state_ = FAILED;
+        failure_mode_ = PLANNING_F;
+        runPlanner_ = false;
+        publishZeroVelocity();
+      }
+      else if(gotPlan){
         ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
         //pointer swap the plans under mutex (the controller will pull from latest_plan_)
         std::vector<geometry_msgs::PoseStamped>* temp_plan = planner_plan_;
@@ -788,18 +796,8 @@ namespace move_base {
            * disabled). We will reset this flag to true after recovery is done.
            */
           runPlanner_ = false;
-          if (planner_status == nav_core::status::FATAL)
-          {
-            // Hit an unrecoverable error, move_base should abort planning
-            state_ = FAILED;
-            failure_mode_ = PLANNING_F;
-          }
-          else 
-          {
-            // Attempt to recover
-            state_ = RECOVERY;
-            recovery_trigger_ = PLANNING_R;
-          }
+          state_ = RECOVERY;
+          recovery_trigger_ = PLANNING_R;
           publishZeroVelocity();
         }
         lock.unlock();
