@@ -1292,7 +1292,7 @@ namespace move_base {
         else if (failure_mode_ == PLANNING_F)
         {
           ROS_ERROR_COND(log_condition, "Fatal planning error.");
-          as_->setAborted(move_base_msgs::MoveBaseResult(), "Fatal planning error.");
+          as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Fatal planning error.");
         }
 
         // Record the failed goal so in the next cycle we don't log a new message
