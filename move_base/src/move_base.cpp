@@ -226,7 +226,6 @@ namespace move_base {
 
     // Create and start the timer for publishing action server feedback
     as_feedback_timer_ = nh.createTimer(ros::Duration(0.05), &MoveBase::asFeedbackTimerCallback, this);
-
     
     nav_core_state_->global_costmap_ = planner_costmap_ros_;
     nav_core_state_->local_costmap_ = controller_costmap_ros_;
@@ -378,7 +377,7 @@ namespace move_base {
     goal_manager_->setCurrentGoal(nav_core::NavGoal(*goal));
 
     action_goal_pub_.publish(action_goal);
-  } 
+  }
 
   void MoveBase::clearCostmapWindows(double size_x, double size_y){
     tf::Stamped<tf::Pose> global_pose;
@@ -722,7 +721,7 @@ namespace move_base {
 
       //run planner
       planner_plan_->clear();
-      int planner_status;
+      int planner_status = nav_core::status::UNDEFINED;
       bool gotPlan = n.ok() && makePlan(planned_goal, *planner_plan_, planner_status);
 
       if(gotPlan){
@@ -781,7 +780,7 @@ namespace move_base {
         lock.lock();
         if(ros::Time::now() >= attempt_end && runPlanner_){
           //we'll move into our obstacle clearing mode
-          /* We're about to change the state to CLEARING (recovery).
+          /* We're about to change the state to RECOVERY.
            * Since performing the recovery process is slower than this
            * while loop, we should set runPlanner_ to false to suspend
            * the planner thread or else we could plan in the middle of
@@ -798,7 +797,7 @@ namespace move_base {
           else 
           {
             // Attempt to recover
-            state_ = CLEARING;
+            state_ = RECOVERY;
             recovery_trigger_ = PLANNING_R;
           }
           publishZeroVelocity();
@@ -1125,7 +1124,7 @@ namespace move_base {
             last_oscillation_reset_ + ros::Duration(oscillation_timeout_) < ros::Time::now())
         {
           publishZeroVelocity();
-          state_ = CLEARING;
+          state_ = RECOVERY;
           recovery_trigger_ = OSCILLATION_R;
         }
 
@@ -1175,7 +1174,7 @@ namespace move_base {
           if(ros::Time::now() > attempt_end){
             //we'll move into our obstacle clearing mode
             publishZeroVelocity();
-            state_ = CLEARING;
+            state_ = RECOVERY;
             recovery_trigger_ = CONTROLLING_R;
           }
           else{
@@ -1196,7 +1195,7 @@ namespace move_base {
       }
 
       //we'll try to clear out space with any user-provided recovery behaviors
-      case CLEARING:
+      case RECOVERY:
       {
         ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
 
@@ -1244,6 +1243,7 @@ namespace move_base {
           ROS_DEBUG_NAMED("move_base_recovery","Something should abort after this.");
         }
         break;
+      }
       case FAILED:
       {
         resetState();
@@ -1255,22 +1255,28 @@ namespace move_base {
         //  We need to abort goal and log a message; decide if we should spit out a new log
         bool log_condition = (distanceXYTheta(planner_goal_, last_failed_goal_) >= 1e-3);
 
-        if (failure_mode_ == RECOVERY_F) {
-          if(recovery_trigger_ == CONTROLLING_R){
+        if (failure_mode_ == RECOVERY_F)
+        {
+          if (recovery_trigger_ == CONTROLLING_R)
+          {
             ROS_ERROR_COND(log_condition, "Aborting because a valid control could not be found. Even after executing all recovery behaviors");
             as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid control. Even after executing recovery behaviors.");
           }
-          else if(recovery_trigger_ == PLANNING_R){
+          else if (recovery_trigger_ == PLANNING_R)
+          {
             ROS_ERROR_COND(log_condition, "Aborting because a valid plan could not be found. Even after executing all recovery behaviors");
             as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid plan. Even after executing recovery behaviors.");
           }
-          else if(recovery_trigger_ == OSCILLATION_R){
+          else if (recovery_trigger_ == OSCILLATION_R)
+          {
             ROS_ERROR_COND(log_condition, "Aborting because the robot appears to be oscillating over and over. Even after executing all recovery behaviors");
             as_->setAborted(move_base_msgs::MoveBaseResult(), "Robot is oscillating. Even after executing recovery behaviors.");
           }
-        } else if (failure_mode_ == PLANNING_F) {
-          ROS_ERROR_COND(log_condition, "Aborting because the end goal is occupied in the global static map");
-          as_->setAborted(move_base_msgs::MoveBaseResult(), "End goal is occupied in the global static map, no valid plans");
+        }
+        else if (failure_mode_ == PLANNING_F)
+        {
+          ROS_ERROR_COND(log_condition, "Fatal planning error.");
+          as_->setAborted(move_base_msgs::MoveBaseResult(), "Fatal planning error.");
         }
 
         // Record the failed goal so in the next cycle we don't log a new message

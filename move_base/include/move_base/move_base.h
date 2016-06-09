@@ -70,7 +70,7 @@ namespace move_base {
   enum MoveBaseState {
     PLANNING,
     CONTROLLING,
-    CLEARING,
+    RECOVERY,
     FAILED
   };
 

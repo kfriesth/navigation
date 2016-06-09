@@ -38,7 +38,8 @@
 #ifndef NAV_CORE_NAV_STATUS_
 #define NAV_CORE_NAV_STATUS_
 
-namespace nav_core {
+namespace nav_core 
+{
   namespace status
   {
     const int UNDEFINED = -1;
