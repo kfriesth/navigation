@@ -43,7 +43,7 @@
 #include <ros/ros.h>
 
 #include <actionlib/server/simple_action_server.h>
-#include <move_base_msgs/MoveBaseAction.h>
+#include <move_base_msgs/AugmentedMoveBaseAction.h>
 
 #include <nav_core/base_local_planner.h>
 #include <nav_core/base_global_planner.h>
@@ -66,12 +66,13 @@
 
 namespace move_base {
   //typedefs to help us out with the action server so that we don't hace to type so much
-  typedef actionlib::SimpleActionServer<move_base_msgs::MoveBaseAction> MoveBaseActionServer;
+  typedef actionlib::SimpleActionServer<move_base_msgs::AugmentedMoveBaseAction> MoveBaseActionServer;
 
   enum MoveBaseState {
     PLANNING,
     CONTROLLING,
-    CLEARING
+    RECOVERY,
+    FAILED
   };
 
   enum RecoveryTrigger
@@ -79,6 +80,12 @@ namespace move_base {
     PLANNING_R,
     CONTROLLING_R,
     OSCILLATION_R
+  };
+
+  enum FailureMode
+  {
+    RECOVERY_F,
+    PLANNING_F
   };
 
   /**
@@ -138,9 +145,10 @@ namespace move_base {
        * @brief  Make a new global plan
        * @param  goal The goal to plan to
        * @param  plan Will be filled in with the plan made by the planner
+       * @param  planner_status Status returned from the planner
        * @return  True if planning succeeds, false otherwise
        */
-      bool makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan);
+      bool makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan, int& planner_status);
 
       /**
        * @brief  Load the recovery behaviors for the navigation stack from the parameter server
@@ -175,7 +183,7 @@ namespace move_base {
 
       void planThread();
 
-      void executeCb(const move_base_msgs::MoveBaseGoalConstPtr& move_base_goal);
+      void executeCb(const move_base_msgs::AugmentedMoveBaseGoalConstPtr& move_base_goal);
 
       bool isQuaternionValid(const geometry_msgs::Quaternion& q);
 
@@ -239,16 +247,27 @@ namespace move_base {
       void asPreemptCallback();
 
       /**
-      * @brief Callback function for the diagnostic updater timer.
-      */
-      void updaterTimerCallback(const ros::TimerEvent&);
+       * @brief Function that resets the recovery cycle counter and stores the
+       * current pose of the robot based on the global costmap.
+       */
+      void resetRecoveryCycleState();
 
       /**
-      * @brief Callback function for the actual diagnostics status updater.
-      * @param[out] stat The status containing the diagnostic level and message.
-      */
-      void diagnosticCallback(diagnostic_updater::DiagnosticStatusWrapper &stat);
+       * @brief Convenience function to return the current pose of the robot
+       * based on a given costmap.
+       * @param costmap Pointer to costmap object.
+       * @param[out] robot_pose The pose of the robot on the costmap.
+       * @return True if successful, false otherwise.
+       */
+      bool getCurrentRobotPose(costmap_2d::Costmap2DROS* costmap,
+        geometry_msgs::PoseStamped& robot_pose);
 
+      /**
+       * @brief Function to decide if too many cycles of recovery has been executed
+       * in short range and if so to force goal abort up the stack.
+       * @return True if goal should be aborted, false otherwise.
+       */
+      bool decideOnForcedGoalAbort();
 
       tf::TransformListener& tf_;
 
@@ -277,6 +296,7 @@ namespace move_base {
 
       MoveBaseState state_;
       RecoveryTrigger recovery_trigger_;
+      FailureMode failure_mode_;
 
       ros::Time last_valid_plan_, last_valid_control_, last_oscillation_reset_;
       geometry_msgs::PoseStamped oscillation_pose_;
@@ -319,11 +339,45 @@ namespace move_base {
        */
       nav_core::State::Ptr nav_core_state_;
 
-      // Set up diagnostics
-      diagnostic_updater::Updater diagnostic_updater_;
-      ros::Timer diagnostic_timer_;
-      std::string diag_msg_;
-      char diag_level_;
+      /**
+       * @brief The last time the action server triggered the execute callback.
+       *        Initial value is the start of the epoch
+       */
+      ros::Time last_execute_callback_;
+
+      /**
+       * @brief The number of seconds that are required to elapse between calls to
+       *        the execute callback via the actions server. Calls faster than this
+       *        will cause the goal to be aborted. Default 0.5 (seconds)
+       */
+      double minimum_goal_spacing_seconds_;
+
+      /**
+       * @brief snapshot of default goal tolerances
+       */
+      nav_core::GoalTolerances::Ptr default_goal_tolerances_;
+
+      /*
+       * @brief Counter for the number of times move_base has gone into recovery.
+       */
+      int recovery_cycle_counter_;
+
+      /**
+       * @brief Counter cap for the number of times move_base has gone into recovery
+       * but the robot hasn't moved in any meaningful way.
+       */
+      int recovery_cycle_counter_cap_;
+
+      /**
+       * @brief Euclidean distance cap on the amount of robot travel before resetting
+       * the recovery cycle counters.
+       */
+      double recovery_cycle_move_cap_;
+
+      /**
+       * @brief Record of the last pose at which the recovery cycle counter is reset.
+       */
+      geometry_msgs::PoseStamped last_pose_at_recovery_reset_;
   };
 };
 #endif

@@ -41,6 +41,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/thread.hpp>
 
+#include <autonomy_msgs_utils/attribute_helper.h>
 #include <geometry_msgs/Twist.h>
 #include <angles/angles.h>
 
@@ -55,7 +56,10 @@ namespace move_base {
     recovery_loader_("nav_core", "nav_core::RecoveryBehavior"),
     planner_plan_(NULL), latest_plan_(NULL), controller_plan_(NULL),
     runPlanner_(false), setup_(false), p_freq_change_(false), c_freq_change_(false),
-    new_global_plan_(false), recovery_cleanup_requested_(false), nav_core_state_(new nav_core::State)
+    new_global_plan_(false), recovery_cleanup_requested_(false), nav_core_state_(new nav_core::State),
+    recovery_cycle_counter_(0),
+    recovery_cycle_counter_cap_(100),
+    recovery_cycle_move_cap_(2.0)
   {
     goal_manager_.reset(new nav_core::NavGoalMananger);
 
@@ -84,9 +88,14 @@ namespace move_base {
     private_nh.param("oscillation_timeout", oscillation_timeout_, 0.0);
     private_nh.param("oscillation_distance", oscillation_distance_, 0.5);
 
+    private_nh.param("recovery_cycle_counter_cap", recovery_cycle_counter_cap_, 7);
+    private_nh.param("recovery_cycle_move_cap", recovery_cycle_move_cap_, 3.0);
+
     // Load goal tolerances (these will eventually be dynamic and come from the action server)
     // The goal tolerances contructor loads from goal_tolerance_xy and goal_tolerance_yaw
     goal_tolerances_ = nav_core::GoalTolerances::Ptr(new nav_core::GoalTolerances(private_nh));
+
+    default_goal_tolerances_ = nav_core::GoalTolerances::Ptr(new nav_core::GoalTolerances(private_nh));
 
     //set up plan triple buffer
     planner_plan_ = new std::vector<geometry_msgs::PoseStamped>();
@@ -101,7 +110,7 @@ namespace move_base {
     current_goal_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("current_goal", 0 );
 
     ros::NodeHandle action_nh("move_base");
-    action_goal_pub_ = action_nh.advertise<move_base_msgs::MoveBaseActionGoal>("goal", 1);
+    action_goal_pub_ = action_nh.advertise<move_base_msgs::AugmentedMoveBaseActionGoal>("goal", 1);
 
     //we'll provide a mechanism for some people to send goals as PoseStamped messages over a topic
     //they won't get any useful information back about its status, but this is useful for tools
@@ -118,6 +127,8 @@ namespace move_base {
     private_nh.param("shutdown_costmaps", shutdown_costmaps_, false);
     private_nh.param("clearing_rotation_allowed", clearing_rotation_allowed_, true);
     private_nh.param("recovery_behavior_enabled", recovery_behavior_enabled_, true);
+
+    private_nh.param<double>("minimum_goal_spacing_seconds", minimum_goal_spacing_seconds_, 0.5);
 
     //create the ros wrapper for the planner's costmap... and initializer a pointer we'll use with the underlying map
     planner_costmap_ros_ = new costmap_2d::Costmap2DROS("global_costmap", tf_);
@@ -209,10 +220,6 @@ namespace move_base {
     //initially, we'll need to make a plan
     state_ = PLANNING;
 
-    //we'll start executing recovery behaviors at the beginning of our list
-    recovery_index_ = 0;
-    active_recovery_index_ = -1;
-
     //we're all set up now so we can start the action server
     as_->start();
 
@@ -228,22 +235,12 @@ namespace move_base {
     nav_core_state_->global_planner_ = planner_;
     nav_core_state_->local_planner_ = tc_;
 
-    // Initalise diagnostics
-    diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
-    diag_msg_ = "Initialized.";
-    diagnostic_updater_.setHardwareID("none");
-    diagnostic_updater_.add("Move_base state", this, &MoveBase::diagnosticCallback);
-    diagnostic_timer_ = nh.createTimer(ros::Duration(1.0), &MoveBase::updaterTimerCallback, this);
-  }
+    // Initialize the last faild goal so that we can see goal abort message
+    last_failed_goal_.pose.position.x = FLT_MAX;
 
-  void MoveBase::updaterTimerCallback(const ros::TimerEvent&)
-  {
-    diagnostic_updater_.update();
-  }
-
-  void MoveBase::diagnosticCallback(diagnostic_updater::DiagnosticStatusWrapper &stat)
-  {
-    stat.summary(diag_level_, diag_msg_);
+    // Initialize the recovery counters and indices
+    resetRecoveryIndices();
+    resetRecoveryCycleState();
   }
 
   void MoveBase::reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level){
@@ -316,8 +313,6 @@ namespace move_base {
         runPlanner_ = false;
         recovery_cleanup_requested_ = true;
         state_ = PLANNING;
-        recovery_index_ = 0;
-        active_recovery_index_ = -1;
         recovery_trigger_ = PLANNING_R;
         publishZeroVelocity();
 
@@ -379,7 +374,7 @@ namespace move_base {
 
   void MoveBase::goalCB(const geometry_msgs::PoseStamped::ConstPtr& goal){
     ROS_DEBUG_NAMED("move_base","In ROS goal callback, wrapping the PoseStamped in the action message and re-sending to the server.");
-    move_base_msgs::MoveBaseActionGoal action_goal;
+    move_base_msgs::AugmentedMoveBaseActionGoal action_goal;
     action_goal.header.stamp = ros::Time::now();
     action_goal.goal.target_pose = *goal;
     goal_manager_->setCurrentGoal(nav_core::NavGoal(*goal));
@@ -587,7 +582,7 @@ namespace move_base {
     recovery_behaviors_.clear();
   }
 
-  bool MoveBase::makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan){
+  bool MoveBase::makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan, int& planner_status){
     boost::unique_lock< boost::recursive_mutex > cm_lock(clear_costmap_mutex_);
 
     //check if the costmap is current before planning on it
@@ -619,7 +614,7 @@ namespace move_base {
 
     // NOTE: The implementation of makePlan is responsible for locking the costmap
     //if the planner fails or returns a zero length plan, planning failed
-    if(!planner_->makePlan(start, goal, plan) || plan.empty()){
+    if(!planner_->makePlan(start, goal, plan, planner_status) || plan.empty()){
       ROS_DEBUG_NAMED("move_base","Failed to find a  plan to point (%.2f, %.2f)", goal.pose.position.x, goal.pose.position.y);
       return false;
     }
@@ -717,6 +712,7 @@ namespace move_base {
         recovery_cleanup_requested_ = false;
         revertRecoveryChanges();
         resetRecoveryIndices();
+        resetRecoveryCycleState();
       }
 
       ros::Time start_time = ros::Time::now();
@@ -728,9 +724,18 @@ namespace move_base {
 
       //run planner
       planner_plan_->clear();
-      bool gotPlan = n.ok() && makePlan(planned_goal, *planner_plan_);
+      int planner_status = nav_core::status::UNDEFINED;
+      bool gotPlan = n.ok() && makePlan(planned_goal, *planner_plan_, planner_status);
 
-      if(gotPlan){
+      if (planner_status == nav_core::status::FATAL)
+      {
+        // Hit an unrecoverable error, move_base should abort planning
+        state_ = FAILED;
+        failure_mode_ = PLANNING_F;
+        runPlanner_ = false;
+        publishZeroVelocity();
+      }
+      else if(gotPlan){
         ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
         //pointer swap the plans under mutex (the controller will pull from latest_plan_)
         std::vector<geometry_msgs::PoseStamped>* temp_plan = planner_plan_;
@@ -786,7 +791,7 @@ namespace move_base {
         lock.lock();
         if(ros::Time::now() >= attempt_end && runPlanner_){
           //we'll move into our obstacle clearing mode
-          /* We're about to change the state to CLEARING (recovery).
+          /* We're about to change the state to RECOVERY.
            * Since performing the recovery process is slower than this
            * while loop, we should set runPlanner_ to false to suspend
            * the planner thread or else we could plan in the middle of
@@ -794,9 +799,9 @@ namespace move_base {
            * disabled). We will reset this flag to true after recovery is done.
            */
           runPlanner_ = false;
-          state_ = CLEARING;
-          publishZeroVelocity();
+          state_ = RECOVERY;
           recovery_trigger_ = PLANNING_R;
+          publishZeroVelocity();
         }
         lock.unlock();
       }
@@ -815,8 +820,24 @@ namespace move_base {
     }
   }
 
-  void MoveBase::executeCb(const move_base_msgs::MoveBaseGoalConstPtr& move_base_goal)
+  void MoveBase::executeCb(const move_base_msgs::AugmentedMoveBaseGoalConstPtr& move_base_goal)
   {
+    ros::Time ros_time_now = ros::Time::now();
+
+    // CORE-3994
+    // Protect against goals being sent too quickly by aborting them
+    // This is a stop-gap until we can use a full action server
+    const double consecutive_goal_time = (ros_time_now - last_execute_callback_).toSec();
+    if (consecutive_goal_time < minimum_goal_spacing_seconds_)
+    {
+      ROS_ERROR_THROTTLE(1, "move_base: Aborting on goal because it was sent too soon after the last goal %gs < %gs",
+                             consecutive_goal_time, minimum_goal_spacing_seconds_);
+      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent too soon after the last goal");
+      goal_manager_->setActiveGoal(false);  // setting no active goal
+      return;
+    }
+    last_execute_callback_ = ros_time_now;
+
     // The Action Server can call the callback on a null ptr. Before doing this it will
     // issue a ROS_ERROR with the text:
     //    Attempting to accept the next goal when a new goal is not available
@@ -825,19 +846,34 @@ namespace move_base {
     // CORE-3682
     if (move_base_goal.get() == NULL)
     {
-      as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was a NULL pointer");
+      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was a NULL pointer");
       goal_manager_->setActiveGoal(false);  // setting no active goal
       return;
     }
 
     if(!isQuaternionValid(move_base_goal->target_pose.pose.orientation)){
-      as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
+      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
       goal_manager_->setActiveGoal(false);  // setting no active goal
       return;
     }
 
     geometry_msgs::PoseStamped goal = goalToGlobalFrame(move_base_goal->target_pose);
     goal_manager_->setCurrentGoal(nav_core::NavGoal(goal));
+
+    // Get the XY goal tolerance with a default of the param file value
+    autonomy_msgs::utils::getAttribute(*move_base_goal,
+                                       "tolerance_xy",
+                                       goal_tolerances_->goal_tolerance_xy_,
+                                       default_goal_tolerances_->goal_tolerance_xy_);
+
+    // Get the Yaw goal tolerance with a default of the param file value
+    autonomy_msgs::utils::getAttribute(*move_base_goal,
+                                       "tolerance_yaw",
+                                       goal_tolerances_->goal_tolerance_yaw_,
+                                       default_goal_tolerances_->goal_tolerance_yaw_);
+
+    // Update goal tolerance for this object and all designated propagated objects (planners, tracker, etc)
+    setGoalTolerances(goal_tolerances_);
 
     //we have a goal so start the planner
     boost::unique_lock<boost::mutex> lock(planner_mutex_);
@@ -874,18 +910,18 @@ namespace move_base {
       if(as_->isPreemptRequested()){
         if(as_->isNewGoalAvailable()){
           //if we're active and a new goal is available, we'll accept it, but we won't shut anything down
-          move_base_msgs::MoveBaseGoalConstPtr new_goal_ptr = as_->acceptNewGoal();
+          move_base_msgs::AugmentedMoveBaseGoalConstPtr new_goal_ptr = as_->acceptNewGoal();
 
           if (new_goal_ptr.get() == NULL)
           {
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was NULL");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was NULL");
             goal_manager_->setActiveGoal(false);  // setting no active goal
             return;
           }
 
-          move_base_msgs::MoveBaseGoal new_goal = *new_goal_ptr;
+          move_base_msgs::AugmentedMoveBaseGoal new_goal = *new_goal_ptr;
           if(!isQuaternionValid(new_goal.target_pose.pose.orientation)){
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
             goal_manager_->setActiveGoal(false);  // setting no active goal
             return;
           }
@@ -896,6 +932,7 @@ namespace move_base {
           //we'll make sure that we reset our state for the next execution cycle
           revertRecoveryChanges();
           resetRecoveryIndices();
+          resetRecoveryCycleState();
           state_ = PLANNING;
 
           //we have a new goal so make sure the planner is awake
@@ -937,6 +974,7 @@ namespace move_base {
         //we want to go back to the planning state for the next execution cycle
         revertRecoveryChanges();
         resetRecoveryIndices();
+        resetRecoveryCycleState();
         state_ = PLANNING;
 
         //we have a new goal so make sure the planner is awake
@@ -984,7 +1022,7 @@ namespace move_base {
     lock.unlock();
 
     //if the node is killed then we'll abort and return
-    as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on the goal because the node has been killed");
+    as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on the goal because the node has been killed");
     return;
   }
 
@@ -1024,6 +1062,7 @@ namespace move_base {
       {
         revertRecoveryChanges();
         resetRecoveryIndices();
+        resetRecoveryCycleState();
       }
     }
 
@@ -1060,7 +1099,7 @@ namespace move_base {
         runPlanner_ = false;
         lock.unlock();
 
-        as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to pass global plan to the controller.");
+        as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to pass global plan to the controller.");
         return true;
       }
     }
@@ -1096,7 +1135,7 @@ namespace move_base {
           runPlanner_ = false;
           lock.unlock();
 
-          as_->setSucceeded(move_base_msgs::MoveBaseResult(), "Goal reached.");
+          as_->setSucceeded(move_base_msgs::AugmentedMoveBaseResult(), "Goal reached.");
           return true;
         }
 
@@ -1105,7 +1144,7 @@ namespace move_base {
             last_oscillation_reset_ + ros::Duration(oscillation_timeout_) < ros::Time::now())
         {
           publishZeroVelocity();
-          state_ = CLEARING;
+          state_ = RECOVERY;
           recovery_trigger_ = OSCILLATION_R;
         }
 
@@ -1155,7 +1194,7 @@ namespace move_base {
           if(ros::Time::now() > attempt_end){
             //we'll move into our obstacle clearing mode
             publishZeroVelocity();
-            state_ = CLEARING;
+            state_ = RECOVERY;
             recovery_trigger_ = CONTROLLING_R;
           }
           else{
@@ -1176,17 +1215,25 @@ namespace move_base {
       }
 
       //we'll try to clear out space with any user-provided recovery behaviors
-      case CLEARING:
-        diag_msg_ = "Move_base is in clearing/recovery state";
-        diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
+      case RECOVERY:
+      {
         ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
-        if (planner_)
-        {
-          // This invokes the planner's prepareForPostRecovery method to prepare it for post-recovery actions.
-          planner_->prepareForPostRecovery();
-        }
+
+        // Decide if this cycle of recovery should proceed as usual or if we should
+        // force goal abort
+        bool force_abort = decideOnForcedGoalAbort();
+
         //we'll invoke whatever recovery behavior we're currently on if they're enabled
-        if(recovery_behavior_enabled_ && recovery_index_ < recovery_behaviors_.size()){
+        if (recovery_behavior_enabled_
+          && recovery_index_ < recovery_behaviors_.size()
+          && !force_abort)
+        {
+          if (planner_)
+          {
+            // This invokes the planner's prepareForPostRecovery method to prepare it for post-recovery actions.
+            planner_->prepareForPostRecovery();
+          }
+
           ROS_DEBUG_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_, recovery_behaviors_.size());
           active_recovery_index_ = recovery_index_;
           recovery_behaviors_[recovery_index_]->runBehavior();
@@ -1205,38 +1252,57 @@ namespace move_base {
           //update the index of the next recovery behavior that we'll try
           recovery_index_++;
         }
-        else{
+        else {
           ROS_DEBUG_NAMED("move_base_recovery","All recovery behaviors have failed, locking the planner and disabling it.");
           //disable the planner thread
           boost::unique_lock<boost::mutex> lock(planner_mutex_);
           runPlanner_ = false;
           lock.unlock();
-
+          state_ = FAILED;
+          failure_mode_ = RECOVERY_F;
           ROS_DEBUG_NAMED("move_base_recovery","Something should abort after this.");
-
-          // We need to abort goal and log a message; decide if we should spit out a new log
-          bool log_condition = (distanceXYTheta(planner_goal_, last_failed_goal_) >= 1e-3);
-
-          if(recovery_trigger_ == CONTROLLING_R){
-            ROS_ERROR_COND(log_condition, "Aborting because a valid control could not be found. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid control. Even after executing recovery behaviors.");
-          }
-          else if(recovery_trigger_ == PLANNING_R){
-            ROS_ERROR_COND(log_condition, "Aborting because a valid plan could not be found. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Failed to find a valid plan. Even after executing recovery behaviors.");
-          }
-          else if(recovery_trigger_ == OSCILLATION_R){
-            ROS_ERROR_COND(log_condition, "Aborting because the robot appears to be oscillating over and over. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::MoveBaseResult(), "Robot is oscillating. Even after executing recovery behaviors.");
-          }
-
-          // Record the failed goal so in the next cycle we don't log a new message
-          last_failed_goal_ = planner_goal_;
-
-          resetState();
-          return true;
         }
         break;
+      }
+      case FAILED:
+      {
+        resetState();
+        //  Disable the planner thread
+        boost::unique_lock<boost::mutex> lock(planner_mutex_);
+        runPlanner_ = false;
+        lock.unlock();
+
+        //  We need to abort goal and log a message; decide if we should spit out a new log
+        bool log_condition = (distanceXYTheta(planner_goal_, last_failed_goal_) >= 1e-3);
+
+        if (failure_mode_ == RECOVERY_F)
+        {
+          if (recovery_trigger_ == CONTROLLING_R)
+          {
+            ROS_ERROR_COND(log_condition, "Aborting because a valid control could not be found. Even after executing all recovery behaviors");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to find a valid control. Even after executing recovery behaviors.");
+          }
+          else if (recovery_trigger_ == PLANNING_R)
+          {
+            ROS_ERROR_COND(log_condition, "Aborting because a valid plan could not be found. Even after executing all recovery behaviors");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to find a valid plan. Even after executing recovery behaviors.");
+          }
+          else if (recovery_trigger_ == OSCILLATION_R)
+          {
+            ROS_ERROR_COND(log_condition, "Aborting because the robot appears to be oscillating over and over. Even after executing all recovery behaviors");
+            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Robot is oscillating. Even after executing recovery behaviors.");
+          }
+        }
+        else if (failure_mode_ == PLANNING_F)
+        {
+          ROS_ERROR_COND(log_condition, "Fatal planning error.");
+          as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Fatal planning error.");
+        }
+
+        // Record the failed goal so in the next cycle we don't log a new message
+        last_failed_goal_ = planner_goal_;
+        return true;
+      }
       default:
         diag_msg_ = "Move_base is in unknown state";
         diag_level_ = diagnostic_msgs::DiagnosticStatus::ERROR;
@@ -1247,7 +1313,7 @@ namespace move_base {
         boost::unique_lock<boost::mutex> lock(planner_mutex_);
         runPlanner_ = false;
         lock.unlock();
-        as_->setAborted(move_base_msgs::MoveBaseResult(), "Reached a case that should not be hit in move_base. This is a bug, please report it.");
+        as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Reached a case that should not be hit in move_base. This is a bug, please report it.");
         return true;
     }
 
@@ -1388,7 +1454,11 @@ namespace move_base {
     return;
   }
 
-  void MoveBase::resetState(){
+  void MoveBase::resetState()
+  {
+    ROS_DEBUG("MoveBase: Resetting state.");
+    publishZeroVelocity();  // stop immediately
+
     goal_manager_->setActiveGoal(false);  // setting no active goal
 
     // Disable the planner thread
@@ -1399,9 +1469,9 @@ namespace move_base {
     // Reset statemachine
     revertRecoveryChanges();
     resetRecoveryIndices();
+    resetRecoveryCycleState();
     state_ = PLANNING;
     recovery_trigger_ = PLANNING_R;
-    publishZeroVelocity();
 
     //if we shutdown our costmaps when we're deactivated... we'll do that now
     if(shutdown_costmaps_){
@@ -1450,6 +1520,11 @@ namespace move_base {
       active_recovery_index_ >= 0 &&
       active_recovery_index_ < static_cast<int>(recovery_behaviors_.size()))
     {
+      // First ensure that we're setting velocities to zero so that we're in a safe state
+      // in case reverting a behaviour is time consuming
+      publishZeroVelocity();
+
+      // Now revert the changed caused by the active behaviour
       recovery_behaviors_[active_recovery_index_]->revertChanges();
     }
   }
@@ -1471,7 +1546,7 @@ namespace move_base {
       tf::poseStampedTFToMsg(global_pose, current_position);
 
       //push the feedback out
-      move_base_msgs::MoveBaseFeedback feedback;
+      move_base_msgs::AugmentedMoveBaseFeedback feedback;
       feedback.base_position = current_position;
       as_->publishFeedback(feedback);
     }
@@ -1483,5 +1558,80 @@ namespace move_base {
     // set a new active goal. For now we will allow behaviours to stop
     // due to no active goal
     goal_manager_->setActiveGoal(false);
+  }
+
+  bool MoveBase::getCurrentRobotPose(costmap_2d::Costmap2DROS* costmap,
+    geometry_msgs::PoseStamped& robot_pose)
+  {
+    if (costmap == NULL)
+    {
+      return false;
+    }
+
+    tf::Stamped<tf::Pose> pose;
+    if (!costmap->getRobotPose(pose) )
+    {
+      return false;
+    }
+
+    // Get the current pose of the robot
+    tf::poseStampedTFToMsg(pose, robot_pose);
+
+    return true;
+  }
+
+  void MoveBase::resetRecoveryCycleState()
+  {
+    ROS_INFO("MoveBase: Resetting recovery counters");
+
+    // Reset the counter
+    recovery_cycle_counter_ = 0;
+
+    // Store the pose
+    geometry_msgs::PoseStamped curr_pose;
+    if (getCurrentRobotPose(planner_costmap_ros_, curr_pose) )
+    {
+      last_pose_at_recovery_reset_ = curr_pose;
+    }
+  }
+
+  bool MoveBase::decideOnForcedGoalAbort()
+  {
+    bool abort = false;
+    bool robot_has_moved_sufficiently = false;
+    double travelled_dist = 0.0;
+
+    // Decide if robot has moved sufficiently
+    geometry_msgs::PoseStamped curr_pose;
+    if (getCurrentRobotPose(planner_costmap_ros_, curr_pose) )
+    {
+      travelled_dist = distance(curr_pose, last_pose_at_recovery_reset_);
+      robot_has_moved_sufficiently = (travelled_dist > recovery_cycle_move_cap_);
+    }
+
+    if (robot_has_moved_sufficiently)
+    {
+      ROS_INFO("MoveBase: Robot has moved sufficiently (%.2f with cap %.2f)."
+        " Resetting recovery cycle counters.", travelled_dist, recovery_cycle_move_cap_);
+
+      resetRecoveryCycleState();
+    }
+    else if (recovery_cycle_counter_ > recovery_cycle_counter_cap_)
+    {
+      ROS_INFO("MoveBase: Recovery cycle counter cap reached and "
+        "robot has not moved enough. Forcing goal abort.");
+
+      resetRecoveryCycleState();
+      abort = true;
+    }
+    else
+    {
+      recovery_cycle_counter_++;
+
+      ROS_INFO("MoveBase: Executing recovery cycle number %d/%d.",
+        recovery_cycle_counter_, recovery_cycle_counter_cap_);
+    }
+
+    return abort;
   }
 };

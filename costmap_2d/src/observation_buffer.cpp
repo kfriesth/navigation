@@ -141,7 +141,13 @@ void ObservationBuffer::bufferCloud(const pcl::PointCloud<pcl::PointXYZ>& cloud)
     // given these observations come from sensors... we'll need to store the origin pt of the sensor
     Stamped < tf::Vector3 > local_origin(tf::Vector3(0, 0, 0),
                             pcl_conversions::fromPCL(cloud.header).stamp, origin_frame);
-    tf_.waitForTransform(global_frame_, local_origin.frame_id_, local_origin.stamp_, ros::Duration(0.5));
+    if (!tf_.waitForTransform(global_frame_, local_origin.frame_id_, local_origin.stamp_, ros::Duration(0.5)))
+    {
+      ROS_WARN("TF %s -> %s at time %f does not exist. May not be published yet", global_frame_.c_str(), local_origin.frame_id_.c_str(), local_origin.stamp_.toSec());
+      observation_list_.pop_front();
+      return;
+    }
+
     tf_.transformPoint(global_frame_, local_origin, global_origin);
     observation_list_.front().origin_.x = global_origin.getX();
     observation_list_.front().origin_.y = global_origin.getY();

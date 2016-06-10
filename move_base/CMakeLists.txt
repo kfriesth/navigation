@@ -3,6 +3,7 @@ project(move_base)
 
 find_package(catkin REQUIRED
     COMPONENTS
+        autonomy_msgs_utils
         cmake_modules
         roscpp
         pluginlib
@@ -22,6 +23,7 @@ generate_dynamic_reconfigure_options(
 
 catkin_package(
     CATKIN_DEPENDS
+        autonomy_msgs_utils
         roscpp
         dynamic_reconfigure
 )

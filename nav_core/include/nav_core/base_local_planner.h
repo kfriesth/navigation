@@ -43,17 +43,11 @@
 #include <tf/transform_listener.h>
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
-#include <nav_core/nav_goal_manager.h>
+#include "nav_core/nav_goal_manager.h"
+#include "nav_core/nav_status.h"
 #include <nav_core/base_planner.h>
 
 namespace nav_core {
-  namespace status
-  {
-    const int UNDEFINED = -1;
-    const int FAIL = 0;
-    const int OK = 1;
-    const int WAIT = 2;
-  }
   /**
    * @class BaseLocalPlanner
    * @brief Provides an interface for local planners used in navigation. All local planners written as plugins for the navigation stack must adhere to this interface.
