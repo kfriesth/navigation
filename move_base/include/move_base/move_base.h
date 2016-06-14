@@ -268,6 +268,11 @@ namespace move_base {
        */
       bool decideOnForcedGoalAbort();
 
+      /**
+       * @brief Abort the active goal
+       */
+      void abortGoal(const std::string& abort_message);
+
       tf::TransformListener& tf_;
 
       MoveBaseActionServer* as_;
@@ -377,6 +382,12 @@ namespace move_base {
        * @brief Record of the last pose at which the recovery cycle counter is reset.
        */
       geometry_msgs::PoseStamped last_pose_at_recovery_reset_;
+
+      /**
+       * @brief Last time a goal was aborted. Used as a short-term mitigation strategy
+       *        to throttle fast abort cycles. CORE-4329 will introduce better method.
+       */
+      ros::Time last_abort_goal_;
   };
 };
 #endif
