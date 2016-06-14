@@ -271,7 +271,7 @@ namespace move_base {
       /**
        * @brief Abort the active goal
        */
-      void abortGoal(std::string abort_message);
+      void abortGoal(const std::string& abort_message);
 
       tf::TransformListener& tf_;
 

@@ -1595,7 +1595,7 @@ namespace move_base {
     return abort;
   }
 
-  void MoveBase::abortGoal(std::string abort_message)
+  void MoveBase::abortGoal(const std::string& abort_message)
   {
     // Until CORE-4329, aborts will be throttled to 1 second
     ros::Time next_valid_abort_time = last_abort_goal_ + ros::Duration(1.0);
