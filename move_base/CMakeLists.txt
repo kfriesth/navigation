@@ -37,6 +37,7 @@ include_directories(
 # move_base
 add_library(move_base
   src/move_base.cpp
+  src/diagnostic_publisher.cpp
 )
 target_link_libraries(move_base
     ${Boost_LIBRARIES}

@@ -63,6 +63,7 @@
 #include <dynamic_reconfigure/server.h>
 #include <diagnostic_updater/diagnostic_updater.h>
 #include "move_base/MoveBaseConfig.h"
+#include "move_base/diagnostic_publisher.h"
 
 namespace move_base {
   //typedefs to help us out with the action server so that we don't hace to type so much
@@ -378,6 +379,11 @@ namespace move_base {
        * @brief Record of the last pose at which the recovery cycle counter is reset.
        */
       geometry_msgs::PoseStamped last_pose_at_recovery_reset_;
+
+      /**
+       * @brief Reports the current move_base state.
+       */
+      DiagnosticPublisher::Ptr state_diagnostics_;
   };
 };
 #endif

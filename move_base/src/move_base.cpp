@@ -241,6 +241,9 @@ namespace move_base {
     // Initialize the recovery counters and indices
     resetRecoveryIndices();
     resetRecoveryCycleState();
+
+    // Initalise diagnositcs
+    state_diagnostics_.reset(new DiagnosticPublisher(private_nh, "Move_base state"));
   }
 
   void MoveBase::reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level){
@@ -1109,8 +1112,9 @@ namespace move_base {
       //if we are in a planning state, then we'll attempt to make a plan
       case PLANNING:
         {
-          diag_msg_ = "Move_base is in planning state";
-          diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
+          state_diagnostics_->report(
+              diagnostic_msgs::DiagnosticStatus::OK, 
+              "Move_base is in planning state");
           boost::mutex::scoped_lock lock(planner_mutex_);
           runPlanner_ = true;
           planner_cond_.notify_one();
@@ -1121,8 +1125,9 @@ namespace move_base {
       //if we're controlling, we'll attempt to find valid velocity commands
       case CONTROLLING:
       {
-        diag_msg_ = "Move_base is in controlling state";
-        diag_level_ = diagnostic_msgs::DiagnosticStatus::OK;
+        state_diagnostics_->report(
+            diagnostic_msgs::DiagnosticStatus::OK, 
+            "Move_base is in controlling state");
         ROS_DEBUG_NAMED("move_base","In controlling state.");
 
         //check to see if we've reached our goal
@@ -1217,7 +1222,10 @@ namespace move_base {
       //we'll try to clear out space with any user-provided recovery behaviors
       case RECOVERY:
       {
-        ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
+        state_diagnostics_->report(
+            diagnostic_msgs::DiagnosticStatus::OK, 
+            "Move_base is in recovery state");
+        ROS_DEBUG_NAMED("move_base","In recovery state");
 
         // Decide if this cycle of recovery should proceed as usual or if we should
         // force goal abort
@@ -1266,6 +1274,9 @@ namespace move_base {
       }
       case FAILED:
       {
+        state_diagnostics_->report(
+            diagnostic_msgs::DiagnosticStatus::OK, 
+            "Move_base is in failed state");
         resetState();
         //  Disable the planner thread
         boost::unique_lock<boost::mutex> lock(planner_mutex_);
@@ -1304,9 +1315,10 @@ namespace move_base {
         return true;
       }
       default:
-        diag_msg_ = "Move_base is in unknown state";
-        diag_level_ = diagnostic_msgs::DiagnosticStatus::ERROR;
-        diagnostic_updater_.force_update();
+        state_diagnostics_->report(
+            diagnostic_msgs::DiagnosticStatus::WARN, 
+            "Move_base is in unknown state");
+
         ROS_ERROR("This case should never be reached, something is wrong, aborting");
         resetState();
         //disable the planner thread
