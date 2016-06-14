@@ -28,16 +28,16 @@ class DiagnosticPublisher
 public:
   typedef boost::shared_ptr<DiagnosticPublisher> Ptr;
 
-  ~DiagnosticPublisher() {}
+  ~DiagnosticPublisher();
 
   DiagnosticPublisher(ros::NodeHandle& nh, const std::string& name);
 
   void report(const char& level, const std::string& message);
 
 private:
-  DiagnosticPublisher() {}
-  DiagnosticPublisher(const DiagnosticPublisher& copy) {}
-  DiagnosticPublisher& operator=(const DiagnosticPublisher& copy) {return *this;}
+  DiagnosticPublisher();
+  DiagnosticPublisher(const DiagnosticPublisher& copy);
+  DiagnosticPublisher& operator=(const DiagnosticPublisher& copy);
 
   void diagnosticCb(diagnostic_updater::DiagnosticStatusWrapper &stat);
   void timerCb(const ros::TimerEvent& event);

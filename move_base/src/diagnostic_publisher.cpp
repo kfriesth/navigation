@@ -24,6 +24,23 @@ DiagnosticPublisher::DiagnosticPublisher(ros::NodeHandle& nh, const std::string&
   updater_->add(name_, this, &DiagnosticPublisher::diagnosticCb);
 }
 
+DiagnosticPublisher::DiagnosticPublisher()
+{
+}
+
+DiagnosticPublisher::DiagnosticPublisher(const DiagnosticPublisher& copy)
+{
+}
+
+DiagnosticPublisher::~DiagnosticPublisher()
+{
+}
+
+DiagnosticPublisher& DiagnosticPublisher::operator=(const DiagnosticPublisher& copy)
+{
+  return *this;
+}
+
 void DiagnosticPublisher::timerCb(const ros::TimerEvent& event)
 {
   updater_->update();

@@ -12,6 +12,7 @@ find_package(catkin REQUIRED
         message_generation
         nav_core
         tf
+        diagnostic_updater
 )
 find_package(Eigen REQUIRED)
 add_definitions(${EIGEN_DEFINITIONS})
