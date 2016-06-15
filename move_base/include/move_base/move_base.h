@@ -270,6 +270,11 @@ namespace move_base {
        */
       bool decideOnForcedGoalAbort();
 
+      /**
+       * @brief Abort the active goal
+       */
+      void abortGoal(const std::string& abort_message);
+
       tf::TransformListener& tf_;
 
       MoveBaseActionServer* as_;
@@ -384,6 +389,12 @@ namespace move_base {
        * @brief Reports the current move_base state.
        */
       DiagnosticPublisher::Ptr state_diagnostics_;
+
+      /**
+       * @brief Last time a goal was aborted. Used as a short-term mitigation strategy
+       *        to throttle fast abort cycles. CORE-4329 will introduce better method.
+       */
+      ros::Time last_abort_goal_;
   };
 };
 #endif
