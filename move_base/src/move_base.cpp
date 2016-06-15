@@ -890,7 +890,7 @@ namespace move_base {
       return;
     }
 
-    geometry_msgs::PoseStamped goal = goalToGlobalFrame(move_base_goal->target_pose);
+    geometry_msgs::PoseStamped goal = move_base_goal->target_pose;
     goal_manager_->setCurrentGoal(nav_core::NavGoal(goal));
 
     // Translate tolerance related attributes into goal tolerances
@@ -950,7 +950,7 @@ namespace move_base {
             return;
           }
 
-          goal = goalToGlobalFrame(new_goal.target_pose);
+          goal = new_goal.target_pose;
           goal_manager_->setCurrentGoal(nav_core::NavGoal(goal));
 
           //we'll make sure that we reset our state for the next execution cycle
@@ -988,34 +988,6 @@ namespace move_base {
           //we'll actually return from execute after preempting
           return;
         }
-      }
-
-      //we also want to check if we've changed global frames because we need to transform our goal pose
-      if(goal.header.frame_id != planner_costmap_ros_->getGlobalFrameID()){
-        goal = goalToGlobalFrame(goal);
-        goal_manager_->setCurrentGoal(nav_core::NavGoal(goal));
-
-        //we want to go back to the planning state for the next execution cycle
-        revertRecoveryChanges();
-        resetRecoveryIndices();
-        resetRecoveryCycleState();
-        state_ = PLANNING;
-
-        //we have a new goal so make sure the planner is awake
-        lock.lock();
-        planner_goal_ = goal;
-        runPlanner_ = true;
-        planner_cond_.notify_one();
-        lock.unlock();
-
-        //publish the goal point to the visualizer
-        ROS_DEBUG_NAMED("move_base","The global frame for move_base has changed, new frame: %s, new goal position x: %.2f, y: %.2f", goal.header.frame_id.c_str(), goal.pose.position.x, goal.pose.position.y);
-        current_goal_pub_.publish(goal);
-
-        //make sure to reset our timeouts
-        last_valid_control_ = ros::Time::now();
-        last_valid_plan_ = ros::Time::now();
-        last_oscillation_reset_ = ros::Time::now();
       }
 
       //for timing that gives real time even in simulation
