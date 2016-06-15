@@ -19,6 +19,7 @@
     <build_depend>autonomy_msgs_utils</build_depend>
     <build_depend>cmake_modules</build_depend>
     <build_depend>costmap_2d</build_depend>
+    <build_depend>diagnostic_updater</build_depend>
     <build_depend>dynamic_reconfigure</build_depend>
     <build_depend>geometry_msgs</build_depend>
     <build_depend>message_generation</build_depend>
@@ -48,6 +49,7 @@
     <run_depend>actionlib</run_depend>
     <run_depend>autonomy_msgs_utils</run_depend>
     <run_depend>costmap_2d</run_depend>
+    <run_depend>diagnostic_updater</run_depend>
     <run_depend>dynamic_reconfigure</run_depend>
     <run_depend>geometry_msgs</run_depend>
     <run_depend>message_runtime</run_depend>

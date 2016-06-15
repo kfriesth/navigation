@@ -12,6 +12,7 @@ find_package(catkin REQUIRED
         message_generation
         nav_core
         tf
+        diagnostic_updater
 )
 find_package(Eigen REQUIRED)
 add_definitions(${EIGEN_DEFINITIONS})
@@ -37,6 +38,7 @@ include_directories(
 # move_base
 add_library(move_base
   src/move_base.cpp
+  src/diagnostic_publisher.cpp
 )
 target_link_libraries(move_base
     ${Boost_LIBRARIES}

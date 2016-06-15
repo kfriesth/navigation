@@ -241,6 +241,9 @@ namespace move_base {
     // Initialize the recovery counters and indices
     resetRecoveryIndices();
     resetRecoveryCycleState();
+
+    // Initalise diagnositcs
+    state_diagnostics_.reset(new DiagnosticPublisher(private_nh, "Move_base state"));
   }
 
   void MoveBase::reconfigureCB(move_base::MoveBaseConfig &config, uint32_t level){
@@ -865,8 +868,7 @@ namespace move_base {
     {
       ROS_ERROR_THROTTLE(1, "move_base: Aborting on goal because it was sent too soon after the last goal %gs < %gs",
                              consecutive_goal_time, minimum_goal_spacing_seconds_);
-      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent too soon after the last goal");
-      goal_manager_->setActiveGoal(false);  // setting no active goal
+      abortGoal("Aborting on goal because it was sent too soon after the last goal");
       return;
     }
     last_execute_callback_ = ros_time_now;
@@ -879,14 +881,12 @@ namespace move_base {
     // CORE-3682
     if (move_base_goal.get() == NULL)
     {
-      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was a NULL pointer");
-      goal_manager_->setActiveGoal(false);  // setting no active goal
+      abortGoal("Aborting on goal because it was a NULL pointer");
       return;
     }
 
     if(!isQuaternionValid(move_base_goal->target_pose.pose.orientation)){
-      as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
-      goal_manager_->setActiveGoal(false);  // setting no active goal
+      abortGoal("Aborting on goal because it was sent with an invalid quaternion");
       return;
     }
 
@@ -938,15 +938,13 @@ namespace move_base {
 
           if (new_goal_ptr.get() == NULL)
           {
-            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was NULL");
-            goal_manager_->setActiveGoal(false);  // setting no active goal
+            abortGoal("Aborting on goal because it was NULL");
             return;
           }
 
           move_base_msgs::AugmentedMoveBaseGoal new_goal = *new_goal_ptr;
           if(!isQuaternionValid(new_goal.target_pose.pose.orientation)){
-            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
-            goal_manager_->setActiveGoal(false);  // setting no active goal
+            abortGoal("Aborting on goal because it was sent with an invalid quaternion");
             return;
           }
 
@@ -1018,7 +1016,7 @@ namespace move_base {
     lock.unlock();
 
     //if the node is killed then we'll abort and return
-    as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Aborting on the goal because the node has been killed");
+    abortGoal("Aborting on the goal because the node has been killed");
     return;
   }
 
@@ -1095,7 +1093,7 @@ namespace move_base {
         runPlanner_ = false;
         lock.unlock();
 
-        as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to pass global plan to the controller.");
+        abortGoal("Failed to pass global plan to the controller.");
         return true;
       }
     }
@@ -1105,6 +1103,9 @@ namespace move_base {
       //if we are in a planning state, then we'll attempt to make a plan
       case PLANNING:
         {
+          state_diagnostics_->report(
+              diagnostic_msgs::DiagnosticStatus::OK, 
+              "Move_base is in planning state");
           boost::mutex::scoped_lock lock(planner_mutex_);
           runPlanner_ = true;
           planner_cond_.notify_one();
@@ -1115,6 +1116,9 @@ namespace move_base {
       //if we're controlling, we'll attempt to find valid velocity commands
       case CONTROLLING:
       {
+        state_diagnostics_->report(
+            diagnostic_msgs::DiagnosticStatus::OK, 
+            "Move_base is in controlling state");
         ROS_DEBUG_NAMED("move_base","In controlling state.");
 
         //check to see if we've reached our goal
@@ -1209,7 +1213,10 @@ namespace move_base {
       //we'll try to clear out space with any user-provided recovery behaviors
       case RECOVERY:
       {
-        ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
+        state_diagnostics_->report(
+            diagnostic_msgs::DiagnosticStatus::OK, 
+            "Move_base is in recovery state");
+        ROS_DEBUG_NAMED("move_base","In recovery state");
 
         // Decide if this cycle of recovery should proceed as usual or if we should
         // force goal abort
@@ -1258,6 +1265,9 @@ namespace move_base {
       }
       case FAILED:
       {
+        state_diagnostics_->report(
+            diagnostic_msgs::DiagnosticStatus::OK, 
+            "Move_base is in failed state");
         resetState();
         //  Disable the planner thread
         boost::unique_lock<boost::mutex> lock(planner_mutex_);
@@ -1272,23 +1282,23 @@ namespace move_base {
           if (recovery_trigger_ == CONTROLLING_R)
           {
             ROS_ERROR_COND(log_condition, "Aborting because a valid control could not be found. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to find a valid control. Even after executing recovery behaviors.");
+            abortGoal("Failed to find a valid control. Even after executing recovery behaviors.");
           }
           else if (recovery_trigger_ == PLANNING_R)
           {
             ROS_ERROR_COND(log_condition, "Aborting because a valid plan could not be found. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Failed to find a valid plan. Even after executing recovery behaviors.");
+            abortGoal("Failed to find a valid plan. Even after executing recovery behaviors.");
           }
           else if (recovery_trigger_ == OSCILLATION_R)
           {
             ROS_ERROR_COND(log_condition, "Aborting because the robot appears to be oscillating over and over. Even after executing all recovery behaviors");
-            as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Robot is oscillating. Even after executing recovery behaviors.");
+            abortGoal("Robot is oscillating. Even after executing recovery behaviors.");
           }
         }
         else if (failure_mode_ == PLANNING_F)
         {
           ROS_ERROR_COND(log_condition, "Fatal planning error.");
-          as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Fatal planning error.");
+          abortGoal("Fatal planning error.");
         }
 
         // Record the failed goal so in the next cycle we don't log a new message
@@ -1296,13 +1306,17 @@ namespace move_base {
         return true;
       }
       default:
+        state_diagnostics_->report(
+            diagnostic_msgs::DiagnosticStatus::WARN, 
+            "Move_base is in unknown state");
+
         ROS_ERROR("This case should never be reached, something is wrong, aborting");
         resetState();
         //disable the planner thread
         boost::unique_lock<boost::mutex> lock(planner_mutex_);
         runPlanner_ = false;
         lock.unlock();
-        as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), "Reached a case that should not be hit in move_base. This is a bug, please report it.");
+        abortGoal("Reached a case that should not be hit in move_base. This is a bug, please report it.");
         return true;
     }
 
@@ -1623,4 +1637,21 @@ namespace move_base {
 
     return abort;
   }
+
+  void MoveBase::abortGoal(const std::string& abort_message)
+  {
+    // Until CORE-4329, aborts will be throttled to 1 second
+    ros::Time next_valid_abort_time = last_abort_goal_ + ros::Duration(1.0);
+
+    // sleep for difference between next abort time and now (negative duration will return immediately)
+    (next_valid_abort_time - ros::Time::now()).sleep();
+
+    // update last abort time for throttling
+    last_abort_goal_ = ros::Time::now();
+
+    // do the abort
+    as_->setAborted(move_base_msgs::AugmentedMoveBaseResult(), abort_message);
+    goal_manager_->setActiveGoal(false);  // setting no active goal
+  }
+
 };
