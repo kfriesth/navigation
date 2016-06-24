@@ -154,7 +154,12 @@ public:
 
     // and rotate tests by -target.yaw
     float sin_neg_yaw, cos_neg_yaw;
+
+#if __APPLE__
+    __sincosf(-tf::getYaw(target.pose.orientation), &sin_neg_yaw, &cos_neg_yaw);
+#else
     sincosf(-tf::getYaw(target.pose.orientation), &sin_neg_yaw, &cos_neg_yaw);
+#endif
 
     const float rotated_test_relative_x = cos_neg_yaw * test_relative_x - sin_neg_yaw * test_relative_y;
     const float rotated_test_relative_y = sin_neg_yaw * test_relative_x + cos_neg_yaw * test_relative_y;
