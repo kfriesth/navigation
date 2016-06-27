@@ -141,7 +141,7 @@ public:
       dyaw -= 2.0 * M_PI;
     }
     return (dx * dx + dy * dy <= goal_tolerance_xy_ * goal_tolerance_xy_) &
-           (dyaw <= goal_tolerance_yaw_);
+           (fabs(dyaw) <= goal_tolerance_yaw_);
   }
 
   /**
