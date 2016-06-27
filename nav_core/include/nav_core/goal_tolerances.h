@@ -135,8 +135,13 @@ public:
    */
   bool lessThanTolerances(float dx, float dy, float dyaw) const
   {
+    dyaw = fmod(fmod(dyaw, 2.0*M_PI) + 2.0*M_PI, 2.0*M_PI);
+    if (dyaw > M_PI)
+    {
+      dyaw -= 2.0 * M_PI;
+    }
     return (dx * dx + dy * dy <= goal_tolerance_xy_ * goal_tolerance_xy_) &
-           (fmod(fabs(dyaw), 2.0 * M_PI) <= goal_tolerance_yaw_);
+           (dyaw <= goal_tolerance_yaw_);
   }
 
   /**
