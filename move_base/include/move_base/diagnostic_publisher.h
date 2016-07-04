@@ -18,6 +18,11 @@ express permission of Clearpath Robotics.
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 
+#include <boost/thread/recursive_mutex.hpp>
+#include <boost/thread.hpp>
+
+namespace move_base
+{
 
 /**
  * Class for convenient publishing of diagnostic status messages.
@@ -48,6 +53,10 @@ private:
   std::string name_;
   char level_;
   std::string message_;
+
+  boost::recursive_mutex mutex_;
 };
+
+}  // namespace move_base
 
 #endif  // MOVE_BASE_DIAGNOSTIC_PUBLISHER_H
