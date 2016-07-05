@@ -559,6 +559,9 @@ namespace move_base {
   }
 
   MoveBase::~MoveBase(){
+    planner_thread_->interrupt();
+    planner_thread_->join();
+
     delete dsrv_;
 
     as_feedback_timer_.stop();
@@ -570,9 +573,6 @@ namespace move_base {
 
     if(controller_costmap_ros_ != NULL)
       delete controller_costmap_ros_;
-
-    planner_thread_->interrupt();
-    planner_thread_->join();
 
     delete planner_thread_;
 
