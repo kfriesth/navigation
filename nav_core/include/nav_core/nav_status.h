@@ -15,7 +15,7 @@
 *     copyright notice, this list of conditions and the following
 *     disclaimer in the documentation and/or other materials provided
 *     with the distribution.
-*   * Neither the name of Willow Garage, Inc. nor the names of its
+*   * Neither the name of Clearpath Robotics, Inc. nor the names of its
 *     contributors may be used to endorse or promote products derived
 *     from this software without specific prior written permission.
 *
@@ -47,6 +47,8 @@ namespace nav_core
     const int OK = 1;
     const int WAIT = 2;
     const int FATAL = 3;
+    const int CANCEL = 4;
   }
-};
+}
+
 #endif
