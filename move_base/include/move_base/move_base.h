@@ -51,6 +51,7 @@
 #include <nav_core/nav_goal_manager.h>
 #include <nav_core/nav_core_state.h>
 #include <nav_core/goal_tolerances_aware.h>
+#include <nav_core/footprint_set.h>
 
 #include <geometry_msgs/PoseStamped.h>
 #include <costmap_2d/costmap_2d_ros.h>
@@ -346,6 +347,8 @@ namespace move_base {
       ros::Timer as_feedback_timer_;
 
       nav_core::NavGoalMananger::Ptr goal_manager_;
+      nav_core::FootprintSetCollection::Ptr footprint_set_collection_;
+      nav_core::FootprintSet::Ptr curr_footprint_set_;
 
       /**
        * @brief Smart pointer to container object to share costmaps and planners

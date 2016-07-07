@@ -134,6 +134,17 @@ namespace move_base {
     planner_costmap_ros_ = new costmap_2d::Costmap2DROS("global_costmap", tf_);
     planner_costmap_ros_->pause();
 
+    // Create the FootprintSetCollection object
+    footprint_set_collection_ = nav_core::FootprintSetCollection::Ptr(
+      new nav_core::FootprintSetCollection(private_nh, planner_costmap_ros_->getCostmap()->getResolution() ) );
+
+    curr_footprint_set_ = footprint_set_collection_->getSet("default");
+    if (!curr_footprint_set_)
+    {
+      ROS_FATAL("move_base: No default footprints were specified on the parameter server for this robot.");
+      exit(1);
+    }
+
     //initialize the global planner
     try {
       //check if a non fully qualified name has potentially been passed in
@@ -1493,6 +1504,7 @@ namespace move_base {
       ros::Time t = ros::Time::now();
       global_planner_cache_.insert(std::make_pair(plugin_name, bgp_loader_.createInstance(plugin_name) ) );
       global_planner_cache_[plugin_name]->setGoalManager(goal_manager_);
+      global_planner_cache_[plugin_name]->setFootprintSet(&curr_footprint_set_);
       propagateGoalTolerancesTo(global_planner_cache_[plugin_name]);
       global_planner_cache_[plugin_name]->setNavCoreState(nav_core_state_);
       global_planner_cache_[plugin_name]->initialize(bgp_loader_.getName(plugin_name), planner_costmap_ros_);
