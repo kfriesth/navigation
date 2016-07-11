@@ -66,6 +66,8 @@
 #include "move_base/MoveBaseConfig.h"
 #include "move_base/diagnostic_publisher.h"
 
+#include "std_msgs/String.h"
+
 namespace move_base {
   //typedefs to help us out with the action server so that we don't hace to type so much
   typedef actionlib::SimpleActionServer<move_base_msgs::AugmentedMoveBaseAction> MoveBaseActionServer;
@@ -283,6 +285,12 @@ namespace move_base {
        */
       void abortGoal(const std::string& abort_message);
 
+      /**
+       * @brief Service callback function that swaps the active footprint set.
+       * @param[in] msg The message containing the name of the requested footprint set.
+       */
+      void swapFootprintSetCallback(const std_msgs::String& msg);
+
       tf::TransformListener& tf_;
 
       MoveBaseActionServer* as_;
@@ -302,8 +310,8 @@ namespace move_base {
       double planner_frequency_, controller_frequency_, inscribed_radius_, circumscribed_radius_;
       double planner_patience_, controller_patience_;
       double conservative_reset_dist_, clearing_radius_;
-      ros::Publisher current_goal_pub_, vel_pub_, action_goal_pub_;
-      ros::Subscriber goal_sub_;
+      ros::Publisher current_goal_pub_, vel_pub_, action_goal_pub_, curr_footprint_set_pub_;
+      ros::Subscriber goal_sub_, swap_footprint_set_req_sub_;
       ros::ServiceServer make_plan_srv_, clear_costmaps_srv_, replan_srv_;
       bool shutdown_costmaps_, clearing_rotation_allowed_, recovery_behavior_enabled_;
       double oscillation_timeout_, oscillation_distance_;

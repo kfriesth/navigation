@@ -145,6 +145,12 @@ namespace move_base {
       ROS_FATAL("move_base: No default footprints were specified on the parameter server for this robot.");
       exit(1);
     }
+    curr_footprint_set_pub_ = private_nh.advertise<std_msgs::String>("curr_footprint_set", 1, true);
+    std_msgs::String footprint_set_msg;
+    footprint_set_msg.data = "default";
+    curr_footprint_set_pub_.publish(footprint_set_msg);
+    swap_footprint_set_req_sub_ = nh.subscribe("swap_footprint_set", 1,
+                                               &MoveBase::swapFootprintSetCallback, this);
 
     //initialize the global planner
     try {
@@ -1674,4 +1680,18 @@ namespace move_base {
     goal_manager_->setActiveGoal(false);  // setting no active goal
   }
 
+  void MoveBase::swapFootprintSetCallback(const std_msgs::String& msg)
+  {
+    nav_core::FootprintSet::Ptr new_set = footprint_set_collection_->getSet(msg.data);
+    if (!new_set)
+    {
+      ROS_ERROR("MoveBase: Unable to swap to requested footprint set: %s", msg.data.c_str() );
+      return;
+    }
+    curr_footprint_set_ = new_set;
+    
+    std_msgs::String footprint_set_msg;
+    footprint_set_msg.data = msg.data;
+    curr_footprint_set_pub_.publish(footprint_set_msg);
+  }
 };
