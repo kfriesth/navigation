@@ -195,6 +195,7 @@ namespace move_base {
       tc_ = blp_loader_.createInstance(local_planner);
       ROS_INFO("Created local_planner %s", local_planner.c_str());
       tc_->setGoalManager(goal_manager_);
+      tc_->setFootprintSet(&curr_footprint_set_);
       propagateGoalTolerancesTo(tc_);
       tc_->initialize(blp_loader_.getName(local_planner), &tf_, controller_costmap_ros_);
 
@@ -369,6 +370,7 @@ namespace move_base {
         controller_plan_->clear();
         resetState();
         tc_->setGoalManager(goal_manager_);
+        tc_->setFootprintSet(&curr_footprint_set_);
         propagateGoalTolerancesTo(tc_);
         tc_->initialize(blp_loader_.getName(config.base_local_planner), &tf_, controller_costmap_ros_);
       } catch (const pluginlib::PluginlibException& ex)

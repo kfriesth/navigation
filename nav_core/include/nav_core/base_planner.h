@@ -71,7 +71,7 @@ protected:
    * @brief Convenience get function so we don't have to double dereference the FootprintSet pointer.
    * @return Pointer to the FootprintSet object.
    */
-  FootprintSet::Ptr footprintMgr()
+  FootprintSet::Ptr& footprintMgr()
   {
     return *footprint_set_ptr_;
   }
