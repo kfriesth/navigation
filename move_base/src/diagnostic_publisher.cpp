@@ -11,6 +11,8 @@ express permission of Clearpath Robotics.
 #include <string>
 #include "move_base/diagnostic_publisher.h"
 
+namespace move_base
+{
 
 DiagnosticPublisher::DiagnosticPublisher(ros::NodeHandle& nh, const std::string& name)
     : nh_(nh)
@@ -20,6 +22,7 @@ DiagnosticPublisher::DiagnosticPublisher(ros::NodeHandle& nh, const std::string&
     , level_(diagnostic_msgs::DiagnosticStatus::OK)
     , message_("Initialized.")
 {
+  boost::recursive_mutex::scoped_lock lock(mutex_);
   updater_->setHardwareID("none");
   updater_->add(name_, this, &DiagnosticPublisher::diagnosticCb);
 }
@@ -43,16 +46,19 @@ DiagnosticPublisher& DiagnosticPublisher::operator=(const DiagnosticPublisher& c
 
 void DiagnosticPublisher::timerCb(const ros::TimerEvent& event)
 {
+  boost::recursive_mutex::scoped_lock lock(mutex_);
   updater_->update();
 }
 
 void DiagnosticPublisher::diagnosticCb(diagnostic_updater::DiagnosticStatusWrapper &stat)
 {
+  boost::recursive_mutex::scoped_lock lock(mutex_);
   stat.summary(level_, message_);
 }
 
 void DiagnosticPublisher::report(const char& level, const std::string& message)
 {
+  boost::recursive_mutex::scoped_lock lock(mutex_);
   bool force_update = (level_ == level) ? false : true;
 
   level_ = level;
@@ -67,3 +73,5 @@ void DiagnosticPublisher::report(const char& level, const std::string& message)
     updater_->update();
   }
 }
+
+}  // namespace move_base

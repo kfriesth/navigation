@@ -62,6 +62,7 @@ namespace move_base {
     recovery_cycle_move_cap_(2.0)
   {
     goal_manager_.reset(new nav_core::NavGoalMananger);
+    last_abort_goal_ = ros::Time::now();
 
     as_ = new MoveBaseActionServer(ros::NodeHandle(), "move_base", boost::bind(&MoveBase::executeCb, this, _1), false);
 
@@ -571,6 +572,9 @@ namespace move_base {
   }
 
   MoveBase::~MoveBase(){
+    planner_thread_->interrupt();
+    planner_thread_->join();
+
     delete dsrv_;
 
     as_feedback_timer_.stop();
@@ -582,9 +586,6 @@ namespace move_base {
 
     if(controller_costmap_ros_ != NULL)
       delete controller_costmap_ros_;
-
-    planner_thread_->interrupt();
-    planner_thread_->join();
 
     delete planner_thread_;
 
@@ -1655,10 +1656,15 @@ namespace move_base {
   void MoveBase::abortGoal(const std::string& abort_message)
   {
     // Until CORE-4329, aborts will be throttled to 1 second
-    ros::Time next_valid_abort_time = last_abort_goal_ + ros::Duration(1.0);
+    ros::Duration abort_throttle(1.0);
+    ros::Time next_valid_abort_time = last_abort_goal_ + abort_throttle;
 
-    // sleep for difference between next abort time and now (negative duration will return immediately)
-    (next_valid_abort_time - ros::Time::now()).sleep();
+    // sleep for difference between next abort time and now (unless negative)
+    ros::Duration sleep_time = (next_valid_abort_time - ros::Time::now());
+    if (sleep_time.toSec() > 0 && sleep_time <= abort_throttle)
+    {
+      sleep_time.sleep();
+    }
 
     // update last abort time for throttling
     last_abort_goal_ = ros::Time::now();
