@@ -39,7 +39,7 @@
 
 #include <nav_core/goal_tolerances.h>
 #include <nav_core/goal_tolerances_aware.h>
-#include <nav_core/footprint_set.h>
+#include <nav_core/footprint_set_aware.h>
 
 namespace nav_core
 {
@@ -47,7 +47,7 @@ namespace nav_core
  * @class BasePlanner
  * @brief Provides an interface for planners used in navigation.
  */
-class BasePlanner : public GoalTolerancesAware
+class BasePlanner : public GoalTolerancesAware, public FootprintSetAware
 {
 public:
   /**
@@ -56,28 +56,6 @@ public:
   virtual ~BasePlanner()
   {
   }
-
-  /**
-   * @brief Provides pointer so planner knows where to look for required footprints.
-   * @param[in] footprint_set_ptr Pointer to the pointer that tracks the current FootprintSet object.
-   */
-  void setFootprintSet(FootprintSet::Ptr* footprint_set_ptr)
-  {
-    footprint_set_ptr_ = footprint_set_ptr;
-  }
-
-protected:
-  /**
-   * @brief Convenience get function so we don't have to double dereference the FootprintSet pointer.
-   * @return Pointer to the FootprintSet object.
-   */
-  FootprintSet::Ptr& footprintMgr()
-  {
-    return *footprint_set_ptr_;
-  }
-
-protected:
-  FootprintSet::Ptr* footprint_set_ptr_;
 };
 
 }  // namespace nav_core

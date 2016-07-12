@@ -230,7 +230,6 @@ namespace move_base {
       planner_costmap_ros_->stop();
       controller_costmap_ros_->stop();
     }
-
     //load any user specified recovery behaviors, and if that fails load the defaults
     if(!loadRecoveryBehaviors(private_nh)){
       loadDefaultRecoveryBehaviors();
@@ -1404,6 +1403,7 @@ namespace move_base {
             }
 
             behavior->setGoalManager(goal_manager_);
+            behavior->setFootprintSet(&curr_footprint_set_);
             //initialize the recovery behavior with its name
             behavior->initialize(behavior_list[i]["name"], &tf_, planner_costmap_ros_, controller_costmap_ros_);
 
@@ -1449,6 +1449,7 @@ namespace move_base {
       //first, we'll load a recovery behavior to clear the costmap
       boost::shared_ptr<nav_core::RecoveryBehavior> cons_clear(recovery_loader_.createInstance("clear_costmap_recovery/ClearCostmapRecovery"));
       cons_clear->setGoalManager(goal_manager_);
+      cons_clear->setFootprintSet(&curr_footprint_set_);
       cons_clear->initialize("conservative_reset", &tf_, planner_costmap_ros_, controller_costmap_ros_);
       recovery_behaviors_.push_back(cons_clear);
 
@@ -1456,6 +1457,7 @@ namespace move_base {
       boost::shared_ptr<nav_core::RecoveryBehavior> rotate(recovery_loader_.createInstance("rotate_recovery/RotateRecovery"));
       if(clearing_rotation_allowed_){
         rotate->setGoalManager(goal_manager_);
+        rotate->setFootprintSet(&curr_footprint_set_);
         rotate->initialize("rotate_recovery", &tf_, planner_costmap_ros_, controller_costmap_ros_);
         recovery_behaviors_.push_back(rotate);
       }
@@ -1463,6 +1465,7 @@ namespace move_base {
       //next, we'll load a recovery behavior that will do an aggressive reset of the costmap
       boost::shared_ptr<nav_core::RecoveryBehavior> ags_clear(recovery_loader_.createInstance("clear_costmap_recovery/ClearCostmapRecovery"));
       ags_clear->setGoalManager(goal_manager_);
+      ags_clear->setFootprintSet(&curr_footprint_set_);
       ags_clear->initialize("aggressive_reset", &tf_, planner_costmap_ros_, controller_costmap_ros_);
       recovery_behaviors_.push_back(ags_clear);
 

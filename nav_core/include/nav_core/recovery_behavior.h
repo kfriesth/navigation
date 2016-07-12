@@ -41,13 +41,15 @@
 #include <nav_core/base_global_planner.h>
 #include <nav_core/base_local_planner.h>
 #include <nav_core/nav_goal_manager.h>
+#include <nav_core/footprint_set.h>
 
 namespace nav_core {
   /**
    * @class RecoveryBehavior
    * @brief Provides an interface for recovery behaviors used in navigation. All recovery behaviors written as plugins for the navigation stack must adhere to this interface.
    */
-  class RecoveryBehavior{
+  class RecoveryBehavior : public FootprintSetAware
+  {
     public:
       /**
        * @brief  Initialization function for the RecoveryBehavior
