@@ -307,6 +307,15 @@ public:
     footprint_clearing_paddings_[Footprint::Mode::DOCK_PADDED] = footprint_clearing_padding;
   }
 
+  /**
+   * @brief Function that returns the name of this footprint set.
+   * @return Name of the footprint set.
+   */
+  std::string getName()
+  {
+    return footprint_set_;
+  }
+
 private:
   /**
    * @brief Function used to read in the coefficients of the dynamic footprint used by the tracker.
@@ -379,9 +388,10 @@ public:
   /**
    * Constructor function. Initializes the footprint sets in the collection from the param server.
    * @param[in] private_nh The rosNodeHandle whose namespace is used to retrieve the footprint parameters.
+   * @param[in] active_set The name of the footprint set that is initially active.
    * @param[in] padding The padding to be applied to padded versions of planner footprints.
    */
-  FootprintSetCollection(ros::NodeHandle& private_nh, double padding = 0.0)
+  FootprintSetCollection(ros::NodeHandle& private_nh, std::string active_set = "default", double padding = 0.0)
   {
     // Load the footprint sets from the parameter server
     XmlRpc::XmlRpcValue footprint_sets_xml;
@@ -397,6 +407,46 @@ public:
         }
       }
     }
+
+    // Initialize and attempt to retrieve the active set
+    active_footprint_set_ = getSet(active_set);
+    if (!active_footprint_set_)
+    {
+      ROS_FATAL("FootprintSetCollection: The footprints were specified for the initial active footprint set: %s",
+                active_set.c_str() );
+      exit(1);
+    }
+
+    // Find the smallest and largest footprints
+    findSmallestLargestRadiiPlannerFootprints();
+  }
+
+  /**
+   * @brief Function used to retrieve the active FootprintSet.
+   * @return Pointer to the active footprint set.
+   */
+  FootprintSet::Ptr& getActiveSet()
+  {
+    return active_footprint_set_;
+  }
+
+  /**
+   * @brief Function used to update the active footprint set.
+   * @param id The name of the footprint set to set as active.
+   * @return True on success. False on failure. On failure, the active set is not updated.
+   */
+  bool setActiveSet(std::string id)
+  {
+    FootprintSet::Ptr set = getSet(id);
+    if (set)
+    {
+      active_footprint_set_ = set;
+      return true;
+    }
+
+    ROS_WARN("FootprintSetCollection: Unable to swap to footprint set: %s. It does not exist.",
+              id.c_str() );
+    return false;
   }
 
   /**
@@ -404,7 +454,7 @@ public:
    * @param id[in] String id of the footprint set to retrieve.
    * @return Pointer to the footprint set requested. NULL pointer is returned if set does not exist.
    */
-  nav_core::FootprintSet::Ptr getSet(std::string id)
+  FootprintSet::Ptr getSet(std::string id)
   {
     try
     {
@@ -416,8 +466,70 @@ public:
     }
   }
 
+  /**
+   * @brief Function that returns the smallest planner inscribed footprint.
+   * @return The footprint with the smallest inscribed radius across all sets.
+   */
+  FootprintSet::Polygon getSmallestInscribedPlannerFootprint()
+  {
+    return smallest_inscribed_planner_footprint_;
+  }
+
 private:
-  std::map<std::string, nav_core::FootprintSet::Ptr> footprint_set_map_;
+  /**
+   * @brief Function that find the smallest and largest planner footprints across all sets in terms of inscribed and
+   * circumscribed radii.
+   */
+  void findSmallestLargestRadiiPlannerFootprints()
+  {
+    double min_ins = DBL_MAX;
+    double min_cir = DBL_MAX;
+    double max_ins = DBL_MIN;
+    double max_cir = DBL_MIN;
+
+    double ins, cir;
+    FootprintSet::Polygon footprint;
+    
+    for (std::map<std::string, FootprintSet::Ptr>::iterator it = footprint_set_map_.begin();
+         it != footprint_set_map_.end(); ++it)
+    {
+      for (int i = Footprint::Mode::NORMAL; i < Footprint::Mode::MODE_LASTINDEX; ++i)
+      {
+        if ((it->second)->getPlannerFootprint(static_cast<Footprint::Mode::Index>(i), footprint) )
+        {
+          costmap_2d::calculateMinAndMaxDistances(footprint, ins, cir);
+          if (ins < min_ins)
+          {
+            min_ins = ins;
+            smallest_inscribed_planner_footprint_ = footprint;
+          }
+          if (ins > max_ins)
+          {
+            max_ins = ins;
+            largest_inscribed_planner_footprint_ = footprint;
+          }
+          if (cir < min_cir)
+          {
+            min_cir = cir;
+            smallest_circumscribed_planner_footprint_ = footprint;
+          }
+          if (cir > max_cir)
+          {
+            max_cir = cir;
+            largest_circumscribed_planner_footprint_ = footprint;
+          }
+        }
+      }
+    }
+  }
+
+private:
+  std::map<std::string, FootprintSet::Ptr> footprint_set_map_;
+  FootprintSet::Ptr active_footprint_set_;
+  FootprintSet::Polygon smallest_inscribed_planner_footprint_; 
+  FootprintSet::Polygon largest_inscribed_planner_footprint_; 
+  FootprintSet::Polygon smallest_circumscribed_planner_footprint_; 
+  FootprintSet::Polygon largest_circumscribed_planner_footprint_; 
 };
 
 }  // namespace nav_core

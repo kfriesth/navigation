@@ -356,7 +356,6 @@ namespace move_base {
 
       nav_core::NavGoalMananger::Ptr goal_manager_;
       nav_core::FootprintSetCollection::Ptr footprint_set_collection_;
-      nav_core::FootprintSet::Ptr curr_footprint_set_;
 
       /**
        * @brief Smart pointer to container object to share costmaps and planners

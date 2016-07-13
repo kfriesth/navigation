@@ -137,17 +137,11 @@ namespace move_base {
 
     // Create the FootprintSetCollection object
     footprint_set_collection_ = nav_core::FootprintSetCollection::Ptr(
-      new nav_core::FootprintSetCollection(private_nh, planner_costmap_ros_->getCostmap()->getResolution() ) );
+      new nav_core::FootprintSetCollection(private_nh, "default", planner_costmap_ros_->getCostmap()->getResolution() ) );
 
-    curr_footprint_set_ = footprint_set_collection_->getSet("default");
-    if (!curr_footprint_set_)
-    {
-      ROS_FATAL("move_base: No default footprints were specified on the parameter server for this robot.");
-      exit(1);
-    }
     curr_footprint_set_pub_ = private_nh.advertise<std_msgs::String>("curr_footprint_set", 1, true);
     std_msgs::String footprint_set_msg;
-    footprint_set_msg.data = "default";
+    footprint_set_msg.data = footprint_set_collection_->getActiveSet()->getName();
     curr_footprint_set_pub_.publish(footprint_set_msg);
     swap_footprint_set_req_sub_ = nh.subscribe("swap_footprint_set", 1,
                                                &MoveBase::swapFootprintSetCallback, this);
@@ -202,7 +196,7 @@ namespace move_base {
       tc_ = blp_loader_.createInstance(local_planner);
       ROS_INFO("Created local_planner %s", local_planner.c_str());
       tc_->setGoalManager(goal_manager_);
-      tc_->setFootprintSet(&curr_footprint_set_);
+      tc_->setFootprintSetCollection(&footprint_set_collection_);
       propagateGoalTolerancesTo(tc_);
       tc_->initialize(blp_loader_.getName(local_planner), &tf_, controller_costmap_ros_);
 
@@ -376,7 +370,7 @@ namespace move_base {
         controller_plan_->clear();
         resetState();
         tc_->setGoalManager(goal_manager_);
-        tc_->setFootprintSet(&curr_footprint_set_);
+        tc_->setFootprintSetCollection(&footprint_set_collection_);
         propagateGoalTolerancesTo(tc_);
         tc_->initialize(blp_loader_.getName(config.base_local_planner), &tf_, controller_costmap_ros_);
       } catch (const pluginlib::PluginlibException& ex)
@@ -1403,7 +1397,7 @@ namespace move_base {
             }
 
             behavior->setGoalManager(goal_manager_);
-            behavior->setFootprintSet(&curr_footprint_set_);
+            behavior->setFootprintSetCollection(&footprint_set_collection_);
             //initialize the recovery behavior with its name
             behavior->initialize(behavior_list[i]["name"], &tf_, planner_costmap_ros_, controller_costmap_ros_);
 
@@ -1449,7 +1443,7 @@ namespace move_base {
       //first, we'll load a recovery behavior to clear the costmap
       boost::shared_ptr<nav_core::RecoveryBehavior> cons_clear(recovery_loader_.createInstance("clear_costmap_recovery/ClearCostmapRecovery"));
       cons_clear->setGoalManager(goal_manager_);
-      cons_clear->setFootprintSet(&curr_footprint_set_);
+      cons_clear->setFootprintSetCollection(&footprint_set_collection_);
       cons_clear->initialize("conservative_reset", &tf_, planner_costmap_ros_, controller_costmap_ros_);
       recovery_behaviors_.push_back(cons_clear);
 
@@ -1457,7 +1451,7 @@ namespace move_base {
       boost::shared_ptr<nav_core::RecoveryBehavior> rotate(recovery_loader_.createInstance("rotate_recovery/RotateRecovery"));
       if(clearing_rotation_allowed_){
         rotate->setGoalManager(goal_manager_);
-        rotate->setFootprintSet(&curr_footprint_set_);
+        rotate->setFootprintSetCollection(&footprint_set_collection_);
         rotate->initialize("rotate_recovery", &tf_, planner_costmap_ros_, controller_costmap_ros_);
         recovery_behaviors_.push_back(rotate);
       }
@@ -1465,7 +1459,7 @@ namespace move_base {
       //next, we'll load a recovery behavior that will do an aggressive reset of the costmap
       boost::shared_ptr<nav_core::RecoveryBehavior> ags_clear(recovery_loader_.createInstance("clear_costmap_recovery/ClearCostmapRecovery"));
       ags_clear->setGoalManager(goal_manager_);
-      ags_clear->setFootprintSet(&curr_footprint_set_);
+      ags_clear->setFootprintSetCollection(&footprint_set_collection_);
       ags_clear->initialize("aggressive_reset", &tf_, planner_costmap_ros_, controller_costmap_ros_);
       recovery_behaviors_.push_back(ags_clear);
 
@@ -1516,7 +1510,7 @@ namespace move_base {
       ros::Time t = ros::Time::now();
       global_planner_cache_.insert(std::make_pair(plugin_name, bgp_loader_.createInstance(plugin_name) ) );
       global_planner_cache_[plugin_name]->setGoalManager(goal_manager_);
-      global_planner_cache_[plugin_name]->setFootprintSet(&curr_footprint_set_);
+      global_planner_cache_[plugin_name]->setFootprintSetCollection(&footprint_set_collection_);
       propagateGoalTolerancesTo(global_planner_cache_[plugin_name]);
       global_planner_cache_[plugin_name]->setNavCoreState(nav_core_state_);
       global_planner_cache_[plugin_name]->initialize(bgp_loader_.getName(plugin_name), planner_costmap_ros_);
@@ -1685,16 +1679,16 @@ namespace move_base {
 
   void MoveBase::swapFootprintSetCallback(const std_msgs::String& msg)
   {
-    nav_core::FootprintSet::Ptr new_set = footprint_set_collection_->getSet(msg.data);
-    if (!new_set)
+    if (!footprint_set_collection_->setActiveSet(msg.data) )
     {
       ROS_ERROR("MoveBase: Unable to swap to requested footprint set: %s", msg.data.c_str() );
-      return;
     }
-    curr_footprint_set_ = new_set;
-    
+
     std_msgs::String footprint_set_msg;
-    footprint_set_msg.data = msg.data;
+    footprint_set_msg.data = footprint_set_collection_->getActiveSet()->getName();
     curr_footprint_set_pub_.publish(footprint_set_msg);
+
+    // Re-initialize planner
+    planner_->resetPlanner();
   }
 };
